@@ -2568,7 +2568,7 @@ In the next section, I’ll show some examples of the code I used to create visu
 
 ## ggplot2: R Tool for Data Visualisation
 
-In my dissertation write-up, I mainly used boxplots, histograms, and scatterplots to visualise my findings. Below is an example of how I visualised my findings on engagement using all of these graphics. I'll start with the boxplots. 
+In my dissertation write-up, I mainly used boxplots, histograms, and scatterplots to visualise my findings. Below is an example of how I visualised my findings on engagement using all of these graphics. I'll start with the boxplots.
 
 ### Boxplots: Visualising Between-Group Differences in Engagement
 
@@ -2610,7 +2610,7 @@ communication_rapport |>
 
 Now each group has its own colour and point shape. But the points are a bit too spread out sideways, making it harder to judge where the data clusters. Also, the fully coloured boxplots obscure the median lines and reduce contrast between box outlines.
 
-To fix this, I made a few tweaks: I reduced the fill opacity to make the box content more transparent, slightly increased the width of the boxplot outlines for better contrast, and narrowed the jitter width so the data points stay closer to their group. I also decided to remove the legend since it is redundant. 
+To fix this, I made a few tweaks: I reduced the fill opacity to make the box content more transparent, slightly increased the width of the boxplot outlines for better contrast, and narrowed the jitter width so the data points stay closer to their group. I also decided to remove the legend since it is redundant.
 
 ```{r}
 en_plot <- communication_rapport |> 
@@ -2659,7 +2659,7 @@ tukey_df <- data.frame(
 )
 ```
 
-Then I added this to the plot using` stat_pvalue_manual()` and coloured the significant p-value red to draw attention:
+Then I added this to the plot using`stat_pvalue_manual()` and coloured the significant p-value red to draw attention:
 
 ```{r}
 en_plot <- en_plot +
@@ -2736,7 +2736,7 @@ en_plot
 
 And with this final touch, the boxplot graphic is complete.
 
-Next I'm going to review histograms. 
+Next I'm going to review histograms.
 
 ### Histograms: Exploring Engagement Within Mixed Pairs
 
@@ -2744,7 +2744,7 @@ Histograms are used to visualise the distribution of a single numerical variable
 
 After finding that participants in mixed pairs tended to engage less than those in matched non-autistic pairs, I wanted to understand whether this difference was mostly driven by reduced engagement from autistic individuals. In other words, I looked at whether autistic participants in mixed pairs were engaging less than their non-autistic partners.
 
-To explore this, I visualised engagement **within mixed pairs only**, comparing autistic and non-autistic participants. The permutation test showed that there was not enough evidence to support a meaningful difference in engagement between the two groups - i.e., there was no evidence that autistic adults engaged less in mixed pairs comparing to non-autistic adults. 
+To explore this, I visualised engagement **within mixed pairs only**, comparing autistic and non-autistic participants. The permutation test showed that there was not enough evidence to support a meaningful difference in engagement between the two groups - i.e., there was no evidence that autistic adults engaged less in mixed pairs comparing to non-autistic adults.
 
 To communicate this clearly, I used histograms.
 
@@ -2919,7 +2919,7 @@ Scatterplots are ideal for exploring the relationship between two continuous var
 
 I found some evidence of a positive relationship: interaction partners reported slightly higher rapport when participants engaged more during the interaction. However, the effect size was small, and when analysing each group separately, there was no clear relationship.
 
-To communicate these findings, I used a scatterplot. 
+To communicate these findings, I used a scatterplot.
 
 ```{r}
 en_rapport_scatterplot <- communication_rapport |> 
@@ -3011,15 +3011,13 @@ en_rapport_scatterplot
 
 Now the key model information is clearly visible on the plot. This makes it easier for readers to interpret the regression line and assess the strength of the relationship at a glance.
 
-# Project Conclusion
+# Final Note
 
-Thank you for taking your time to review this project. It was my first project in R, and it took a lot of time and energy, but I'm very grateful since it's been a great learning journey for me.
+Thank you for taking the time to explore this project. It was my first time working with R, and although it took a lot of time and energy, it was a genuinely valuable learning journey.
 
-If you have any questions/comments or would like me to analyse your data, please reach out to me at daniilssmirnovs11\@gmail.com.
+If you have any questions, feedback, or if you'd like support with your own data analysis, feel free to get in touch: 📧 daniilssmirnovs11\@gmail.com
 
-Otherwise, thank you again and have a great day!
-
-my last words forthis project are Rrrrr
+Thanks again — and as a final thought, all I can say is: *Rrrrr*!
 
 # Code Appendix
 
@@ -3030,6 +3028,7 @@ my last words forthis project are Rrrrr
 ```{r}
 identify_outliers(communication_rapport, research_group, backchanneling_freq)
 ```
+
 ```{r}
 plot_boxplots(communication_rapport, research_group, backchanneling_freq)
 ```
@@ -3739,7 +3738,6 @@ rapport_backchanneling_overall <- communication_rapport |>
 
 rapport_backchanneling_overall
 ```
-
 
 ```{r}
 rapport_backchanneling_overall_line <- communication_rapport |> 
