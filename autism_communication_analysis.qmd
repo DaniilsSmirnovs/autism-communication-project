@@ -1,0 +1,3988 @@
+---
+title: "Analysis of Verbal Communication Differences between Autistic and Non-autistic Adults"
+author: Daniils Smirnovs
+format: 
+  html:
+    toc: true  
+    toc-title: "Contents"
+    number-sections: true
+    self-contained: true  
+    code-fold: false  
+    toc-depth: 4
+---
+
+# Project Outcomes
+
+By completing this project, I gained experience in:
+
+-   Cleaning and analysing real-world data
+-   Applying statistical tests
+-   Visualising research findings
+-   Using R, the Tidyverse package, and other supporting packages
+
+# Introduction
+
+For my dissertation, I analysed communication differences between autistic and non-autistic adults. My aim was to investigate how verbal communication is linked to rapport-building for each neurotype. Specifically, I focused on verbal engagement and verbal backchanneling, exploring how these communicative behaviours varied across different neurotype pairs and their connection with rapport-building.
+
+As part of this research, I extracted data from a series of pre-recorded interactions. Each interaction was centred around learning a new skill, and involved two people, either with matched or mixed neurotypes (see Fig. 1A). The data I extracted included the total length of each interaction, as well as the verbal engagement and backchanneling of the participant. Additionally, I used the rapport scores given by each participant’s interaction partner at the end of the interaction (see Fig. 1B).
+
+![](research%20design_1.png){width="378"}
+
+![](research%20design_2.png){width="378"}
+
+::: {style="background-color: #e0e0e0; padding: 5px; border-radius: 5px;"}
+Figure 1. Summary of the research design (A and B). Panel A shows the grouping of participants into pairs, either with matched neurotypes (autistic-autistic or non-autistic–non-autistic) or mixed neurotypes (autistic–non-autistic). In the figure, autistic individuals are represented in plum, while non-autistic individuals are shown in grey. Panel B depicts the data collected. In each pair, I collected verbal communication (backchanneling and engagement) data from the participant and rapport scores from their interaction partner.
+:::
+
+By analysing this data, I aimed to answer the following questions:
+
+1.  Do people interact for longer, shorter, or the same amount of time when paired with someone of the same neurotype?
+
+2.  Do people experience a stronger sense of rapport when paired with someone of the same neurotype?
+
+3.  Are people more verbally engaged when interacting with someone of the same neurotype? Is this pattern consistent for both autistic and non-autistic individuals?
+
+4.  Does verbal backchanneling occur more frequently when both individuals are of the same neurotype? Is this pattern consistent for both autistic and non-autistic individuals?
+
+5.  Does higher verbal engagement and/or backchanneling contribute to building rapport? And is this relationship consistent across different neurotype pairs?
+
+Based on previous research, I expected interaction length to be roughly similar across matched and mixed pairs, but rapport scores to be higher in matched pairs. I also anticipated that both autistic and non-autistic pairs would spend a greater proportion of time verbally engaging with their interaction partner than those in mixed pairs. Additionally, I predicted that higher verbal engagement would be linked to higher rapport scores within matched pairs. In contrast, I expected only non-autistic pairs to produce backchannels more frequently than mixed or autistic pairs, with a higher rate of backchanneling contributing to stronger rapport specifically in those non-autistic pairs (see Table 1). For the (admittedly debatable) explanation behind these predictions, see my Honours Project (Section *Introduction: Aims and Hypotheses*).
+
+[Table 1. Summary of expected research outcomes.]{.underline}
+
++-----------------------------------------+-------------------------------+-------------------------------+-------------------------------+
+| Variable                                | Autistic Pairs                | Non-autistic Pairs            | Mixed Pairs                   |
++=========================================+===============================+===============================+===============================+
+| Interaction Duration                    | ![](equal.png){width="39"}    | ![](equal.png){width="39"}    | ![](equal.png){width="37"}    |
++-----------------------------------------+-------------------------------+-------------------------------+-------------------------------+
+| Rapport                                 | ![](Increase.png){width="39"} | ![](Increase.png){width="39"} | ![](decrease.png){width="39"} |
++-----------------------------------------+-------------------------------+-------------------------------+-------------------------------+
+| Verbal Engagement                       | ![](Increase.png){width="39"} | ![](Increase.png){width="39"} | ![](decrease.png){width="39"} |
++-----------------------------------------+-------------------------------+-------------------------------+-------------------------------+
+| Engagement and Rapport Relationship     | ![](Increase.png){width="39"} | ![](Increase.png){width="39"} | ![](equal.png){width="39"}    |
++-----------------------------------------+-------------------------------+-------------------------------+-------------------------------+
+| Verbal Backchanneling                   | ![](equal.png){width="39"}    | ![](Increase.png){width="39"} | ![](equal.png){width="39"}    |
++-----------------------------------------+-------------------------------+-------------------------------+-------------------------------+
+| Backchanneling and Rapport Relationship | ![](equal.png){width="39"}    | ![](Increase.png){width="39"} | ![](equal.png){width="39"}    |
++-----------------------------------------+-------------------------------+-------------------------------+-------------------------------+
+
+In this project, I work with the data to test if these predictions hold. I move through key stages of data analytics — starting with **processing** my raw data, then **analysing** the cleaned datasets, and finally **sharing** my findings.
+
+Below is the R code I use at each stage of the project, along with detailed commentary to demonstrate my data handling skills in R.
+
+## Libraries
+
+Before I begin, here is a list of all the supporting packages I use during this project:
+
+```{r Libraries, message = FALSE, warning = FALSE}
+
+library(tidyverse)
+library(janitor)
+library(readxl)
+library(skimr)
+library(emmeans)
+library(survival)
+library(coin)
+library(stats)
+library(rstatix)
+library(ggpubr)
+library(patchwork)
+library(grid) 
+```
+
+# Processing Data
+
+Once the research objectives are in place and the necessary data prepared, it is time to process the data. The **process phase** is essentially when you clean and organise your data. This involves tasks like fixing errors and inconsistencies, transforming data into a more usable format, and combining multiple datasets. In short — making sure the data is ready before diving into analysis.
+
+And that’s exactly what I’ll be doing at this stage of the project. I’ll start by importing my data, then introduce the validation criteria I use to check data integrity and guide me through the cleaning process. I’ll clean the data, aggregate it, transform it into wide and long format tables, and finally combine datasets so I’ve got everything I need for the analysis stage.
+
+Without further ado, let’s get started!
+
+## Data Import
+
+The first challenge I encounter is that my verbal engagement and backchanneling data are split across 59 separate *.txt files*, each corresponding to a single participant. I need to combine these files into one dataset while ensuring that each entry can still be traced back to the original participant for later analysis. This process proves to be a bit tricky and takes some time to figure out. Ultimately, I settle on writing a function:
+
+```{r Data Import: Verbal Communication}
+# Before creating a function, I make some preparations. 
+# First, I point R to the folder where my data are stored.
+# In my case, I have a folder called "raw_data" in the working directory:
+data_dir <- "raw_data"
+
+# Next, I list all the .txt files in that folder.
+# Each .txt file corresponds to a single participant and contains data on their 
+# verbal communication:
+data_files <- list.files(data_dir, pattern = "\\.txt$", full.names = TRUE)
+
+# All .txt files follow the same structure and share the same column names:
+column_names <- c("measurement", "programme_version", "start", "finish", "length", "type")
+
+# Finally, I create an empty list to temporarily store each participant's data:
+participant_data <- list()
+
+# Now that I have everything ready, I write a function to loop through each file, 
+# apply column names, add participant ID, and import the data into the list:
+for (file in data_files) {
+  
+  # Read the data and apply column names:
+  data <- read.table(file, header = FALSE, sep = "\t", col.names = column_names)
+  
+  # Extract the participant ID by removing the '.txt' extension from the file name:
+  participant_id <- gsub("\\.txt$", "", basename(file))
+  
+  # Add a new column to track the participant ID:
+  data$participant_id <- participant_id
+  
+  # Store the cleaned data in the list:
+  participant_data[[participant_id]] <- data
+}
+
+# Then, I combine all individual data frames into one large data frame:
+communication <- do.call(rbind, participant_data)
+
+# and reset row names for clarity:
+rownames(communication) <- NULL
+
+# We’ve got our data imported. Perfect!
+
+# Before finishing up, I remove the intermediate variables to keep things neat and nice:
+rm(list = c("data", "participant_data", "column_names", "data_dir", "data_files", 
+            "file", "participant_id"))
+```
+
+In addition, I upload another dataset that contains participants' rapport scores. This turns out to be much more straightforward since the data is stored in a single *Excel table* and can be easily uploaded using `read_excel()` function:
+
+```{r Data Import: Rapport}
+rapport <- read_excel("raw_data/demo_rapport.xlsx") |> 
+  
+  # clean_names(): makes sure the variable names are clean and 
+  # follow a consistent format:
+  clean_names()
+```
+
+I now have two datasets to work with: `communication` and `rapport`. I need to check each one to ensure that everything is in order and clean up anything that needs fixing. This process — called **data validation** and **cleaning** — makes sure the data is reliable and ready for analysis.
+
+## Validation Checklist
+
+Data validation is the process of ensuring the integrity of the data - making sure it’s trustworthy and reliable enough to base your analysis on. To check for data integrity, I have compiled the following checklist:
+
+-   [ ] Check that data is **relevant** to the analysis.
+-   [ ] Check that data is **complete** (e.g., no explicit or implicit missing values).
+-   [ ] Check that data is **accurate** (e.g., each data entry is unique and there are no duplicates).
+-   [ ] Check that data **matches the data type** defined for each field.
+-   [ ] Check that data falls **within an acceptable range** of values defined for each field.
+-   [ ] Check that data conforms to a **specific structure** (e.g., follows a specific pattern).
+-   [ ] Check that data is **consistent** across different fields (if different fields are interconnected).
+
+I’ll explore each dataset by focusing on its variables and checking whether the data meets these criteria. If it doesn’t, I’ll clean it up.
+
+I’ll start with the `communication` dataset.
+
+## Dataset `communication` Clean-Up
+
+First, I take a quick look at the overall structure of the dataset using `str()` function:
+
+```{r Variables Check}
+str(communication)
+```
+
+The dataset contains *7 variables* and *1,754 observations*. To ensure that this is accurate, I check that there are no duplicate rows in the dataset using `distinct()` function:
+
+```{r}
+str(distinct(communication))
+# The number of observations is the same. No duplicates.
+```
+
+There are no duplicates. The 7 variables in this dataset are:
+
+1.  measurement,
+
+2.  programme version,
+
+3.  measurement's start time,
+
+4.  measurement's finish time,
+
+5.  measurement's length,
+
+6.  measurement's type, and
+
+7.  participant's ID.
+
+I will now go through each variable step by step and clean the data for each field where appropriate.
+
+### Variable `measurement`
+
+Data in the `measurement` variable should only match the categories from the table below (Table 2).
+
+[Table 2. Definitions of measurement categories.]{.underline}
+
++-----------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Measurement           | Definition                                                                                                                                                                                                                                                                                                                                                    |
++=======================+===============================================================================================================================================================================================================================================================================================================================================================+
+| Interaction           | Shows the duration of the interaction between two participants in each pair.\                                                                                                                                                                                                                                                                                 |
+|                       | The interaction was centred around completing a task and learning a new skill, with the participant taking the role of the *observer* (or *student*) and their interaction partner taking on the role of the *demonstrator* (or *teacher*).                                                                                                                   |
+|                       |                                                                                                                                                                                                                                                                                                                                                               |
+|                       | For further details about the task and roles, see my Honours Project (Section *Methods: Dyadic interactions*).                                                                                                                                                                                                                                                |
++-----------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|                       | In most cases, there was one interaction measurement per pair. However, if the interaction was interrupted (e.g., the researcher entered the room), multiple measurements were recorded (e.g., one before the interruption and another after) (see Fig. 3).                                                                                                   |
+|                       |                                                                                                                                                                                                                                                                                                                                                               |
+|                       | ![](measurement%20interaction.png){width="511"}                                                                                                                                                                                                                                                                                                               |
+|                       |                                                                                                                                                                                                                                                                                                                                                               |
+|                       | ::: {style="background-color: #e0e0e0; padding: 5px; border-radius: 5px;"}                                                                                                                                                                                                                                                                                    |
+|                       | Figure 3. Interaction Measurement. The figure illustrates an example of an interaction that was interrupted by the researcher and then resumed.                                                                                                                                                                                                               |
+|                       | :::                                                                                                                                                                                                                                                                                                                                                           |
++-----------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Engagement            | Each interaction is divided into periods of *High*, *Low* and *Swap* engagement based on the participant's verbal activity. For the definition of each engagement level see Table 4.                                                                                                                                                                          |
++-----------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|                       | In most cases, High, Low and Swap engagement periods alternated, resulting in multiple engagement measurements.                                                                                                                                                                                                                                               |
+|                       |                                                                                                                                                                                                                                                                                                                                                               |
+|                       | The sum of all engagement measurements should equal the total length of the interaction (see Fig. 4).                                                                                                                                                                                                                                                         |
+|                       |                                                                                                                                                                                                                                                                                                                                                               |
+|                       | ![](measurements.png){width="430"}                                                                                                                                                                                                                                                                                                                            |
+|                       |                                                                                                                                                                                                                                                                                                                                                               |
+|                       | ::: {style="background-color: #e0e0e0; padding: 5px; border-radius: 5px;"}                                                                                                                                                                                                                                                                                    |
+|                       | Figure 4. Engagement Measurement. Each interaction was broken down into engagement periods (EnP), with each period classified as High, Low, or Swap. The figure illustrates an example of an interaction divided into four engagement periods.                                                                                                                |
+|                       | :::                                                                                                                                                                                                                                                                                                                                                           |
++-----------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Backchannel Responses | Shows an instance of the participant's backchannel response (i.e., Backchanneling).                                                                                                                                                                                                                                                                           |
++-----------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|                       | Backchannel responses are further split into the following categories: Laughs, Non-lexical speech, Lexical speech and Short phrases (see Fig. 5).                                                                                                                                                                                                             |
+|                       |                                                                                                                                                                                                                                                                                                                                                               |
+|                       | ![](measurement%20backchanneling.png){width="430"}                                                                                                                                                                                                                                                                                                            |
+|                       |                                                                                                                                                                                                                                                                                                                                                               |
+|                       | ::: {style="background-color: #e0e0e0; padding: 5px; border-radius: 5px;"}                                                                                                                                                                                                                                                                                    |
+|                       | Figure 5. Backchanneling Measurement. All backchannel responses were recorded and categorised into one of four groups. The figure illustrates an example of an interaction with five backchannel responses: three belonged to the Lexical Speech group (dark purple), one to the Non-Lexical Speech group (bright green), and one to the Laughs group (grey). |
+|                       | :::                                                                                                                                                                                                                                                                                                                                                           |
++-----------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+To start, I check if the data in this field matches the categories above using `unique()` function.
+
+```{r}
+# To check that, I list all unique values in the `measurement` field:
+unique(communication$measurement)
+```
+
+All values fall within the acceptable range, with the exception of "Non-verbal" and "Non-verbal Engagement". Since my focus is on verbal communication, these values are irrelevant to my analysis and can be removed. Additionally, I need to indicate that all individual categories of backchannel responses belong to one measurement group - Backchanneling.
+
+To address these points, I will:
+
+1.  Filter out all "Non-verbal Engagement" and "Non-verbal" values using `filter()` function.
+2.  Group all backchannel responses into a single category, "Backchanneling" using `case_when()` function.
+
+In the process, I create a new dataset - `communication_clean` to store the cleaned data.
+
+```{r}
+# Create a new dataset to store cleaned data:
+communication_clean <- communication |> 
+  
+  #  Remove "Non-verbal Engagement" and "Non-verbal" backchannel responses:
+  filter(measurement != "Non-verbal Engagement" & measurement != "Non-verbal") |> 
+  
+  # Rename all backchannel responses into a single category: "Backchanneling":
+  mutate(measurement = 
+           case_when(
+             measurement == "Laughs" ~  "Backchanneling (Laughs)",
+             measurement == "Lexical speech" ~  "Backchanneling (Lexical Speech)",
+             measurement == "Non-lexical speech" ~  "Backchanneling (Non-lexical Speech)",
+             measurement == "Short phrases" ~  "Backchanneling (Short Phrases)",
+             TRUE ~ measurement)
+         )
+
+# Did it work?
+unique(communication_clean$measurement)
+
+# It did!
+```
+
+Now, all data in this field falls **within the acceptable range** and is **relevant**. The data is **accurate** (no duplicate values due to misspellings) and **complete** (there are no explicit missing values). \[Note: I will check for implicit blank values later in *Data Aggregation*.\]
+
+Almost all validation criteria for clean data have been addressed, except for two: specific structure and data type.
+
+The data in this field doesn’t follow a specific structure, so the **specific structure** criterion doesn’t apply here.
+
+The data should be *qualitative* and nominal, meaning it falls into a small set of distinct categories without any inherent order. In R, this type of data is best represented as a *factor*.
+
+```{r}
+# Check the data type:
+str(communication_clean$measurement)
+```
+
+Currently, the data is stored as a *character* (also referred to as a *string*). To align it with the proper data type, I transform it into a factor using `mutate()` and `as.factor()` functions:
+
+```{r}
+communication_clean <- communication_clean |> 
+  
+  # Convert `measurement` to a factor:
+  mutate(measurement = as.factor(measurement))
+
+# Was the transformation successful?
+str(communication_clean$measurement)
+levels(communication_clean$measurement)
+
+# Yes, it was!
+```
+
+The data now **matches the data type** defined for the field. With this final step, all validation criteria for the variable `measurement` have been checked, and the data is fully cleaned. I can move on to the next variable.
+
+### Variable `programme_version`
+
+The programme version remained the same during data prepartion stage and doesn’t contribute any meaningful information to the analysis. Since it’s irrelevant to my goals, I remove it from the dataset using `select()` function.
+
+```{r}
+communication_clean <- communication_clean |> 
+  select(-programme_version)
+```
+
+### Variables `start`, `finish` and `length`
+
+The `start`, `finish`, and `length` variables are interconnected and best reviewed together.
+
+-   `start`: Indicates when the measurement started.
+-   `finish`: Indicates when the measurement finished.
+-   `length`: Indicates the duration of the measurement (calculated as the difference between `start` and `finish` times).
+
+I only need the `length` variable for my analysis, so the `start` and `finish` variables could be removed. However, I'm not going to do it just yet, since these variables could be used in data validation process.
+
+I begin by checking if the data matches the expected data type. Since these variables represent qualitative, continuous measurements, they should be stored as *numeric values* in R.
+
+```{r}
+# Check the data type for each variable: 
+communication_clean |> 
+  select(start, finish, length) |> 
+  str()
+
+# All variables match the expected data type!
+```
+
+The data **matches the expected type**. Next, I verify that there are no missing values and that all values fall within the acceptable range and are non-negative. I do this using `filter()`, `if_any()` and *lambda* functions:
+
+```{r}
+communication_clean |> 
+  filter(
+    
+    # In R. missing numeric values are represented as `NA`.
+    # Check for missing values (NA) across the fields:
+    if_any(start:length, is.na) |
+    
+    # Ensure no values are negative using lambda function:
+    if_any(start:length, \(x) x < 0) 
+         )
+```
+
+There are no missing or negative values, confirming that the data is **complete** and **falls within the acceptable range**. The data does not follow any **specific structure** so this criterion does not apply here.
+
+Finally I check the data for accuracy and consistency across the fields. To meet these criteria, the following conditions must hold:
+
+1.  The `length` values must equal the difference between `finish` and `start` values.
+2.  For each participant, the sum of all interaction `length` values must match the sum of all engagement `length` values (see Table 2).
+3.  All `length` values for backchanneling should be equal to 1 (see Table 2).
+
+Let's first check if the `length` variables were calculated correctly and equal the difference between `finish` and `start` values. Here's how I go about it:
+
+```{r}
+# First, I create a new temporary dataset `finish_start_valid` to store 
+# variables used for validation. 
+finish_start_valid <- communication_clean |> 
+  
+  # Add a new column `diff` containing the difference between `finish` and `start`:  
+  mutate(diff = finish - start,
+         
+         # Round `diff` to 3 decimal places:
+         diff = round(diff, 3),
+         
+         # Create a new column comparing `diff` with `length`, returning 
+         # TRUE if they match or FALSE if they don't.
+         # Variable `length` is also rounded to 3 decimals for consistency.
+         diff_matches_length = diff == round(length, 3)
+         )
+
+summary(finish_start_valid$diff_matches_length)
+
+# This shows two FALSE values, meaning there are two mismatched values. 
+# Let's check which they are:
+finish_start_valid |> 
+  filter(diff_matches_length == FALSE)
+```
+
+We can see that the `length` values are smaller than they should be for Interaction measurement in **participant 61** (223.500 vs 246.674) and Engagement measurement in **participant 68** (68.246 vs 88.284). There are two possible explanations for this discrepancy: either the `length` values were calculated incorrectly, or the `start` and `finish` values are inaccurate.
+
+To figure out which explanation is more likely, let’s take a closer look at each participant’s data.
+
+As a reminder, the total length of all engagement periods should add up to the total length of the interaction. If the `start` and `finish` values are wrong but the `length` values are correct, this relationship should still hold. But if the `length` values were miscalculated, the total engagement and interaction lengths won’t match — and the difference between them should be the same as the gap between the expected and recorded `length` values.
+
+Let’s first examine the data for **participant 61**:
+
+```{r}
+# Participant 61
+P61 <- communication_clean |> 
+  
+  # Filter for participant 61 and the "Interaction" and "Engagement" measurements: 
+  filter(participant_id == "P61(1)" & measurement %in% 
+           c("Interaction", "Engagement")) |> 
+  
+  
+  # Group by measurement type and calculate the total length for each:
+  group_by(measurement) |> 
+  summarise(total_length = sum(length))
+
+# Check the total lengths:
+print(P61)
+
+# Does the difference between the total lengths of engagement and 
+# interaction match the difference between 
+# 223.500 and 246.674?
+near((P61[1,2] - P61[2,2]), (246.674 - 223.500))
+
+# It does match!
+```
+
+The total length of all engagement measurements does not equal the total length of the interaction measurement. Instead, the difference between the total lengths matches the discrepancy between the recorded and expected `length` values (246.674 - 223.500). This suggests that the `length` value was miscalculated.
+
+Now let’s check if the same pattern holds for **participant 68**:
+
+```{r}
+# Participant 68
+# I perform the same transformations as for participant 61:
+P68 <- communication_clean |> 
+  filter(participant_id == "P68(1)" & measurement %in% 
+           c("Interaction", "Engagement")) |> 
+  group_by(measurement) |> 
+  summarise(max_length = sum(length))
+
+print(P68)
+
+# Does the difference between the total lengths of engagement and 
+# interaction match the difference between 88.284 and 68.246?
+near((P68[2,2] - P68[1,2]), (88.284 - 68.246))
+```
+
+Again, we observe the same pattern. Based on these findings, I conclude that the `length` values were calculated incorrectly for both participants.
+
+Let’s correct these errors by adding a new column with the recalculated lengths using `mutate()` function and removing the old column using `select()` function:
+
+```{r}
+communication_clean <- communication_clean |> 
+  
+  # Add a new column with the corrected `length` values.
+  # [Length is expressed in seconds - hence the symbol _s]
+  mutate(measurement_length_s = finish - start,
+         measurement_length_s = round(measurement_length_s, 3)
+         ) |> 
+  
+  # Remove the old column:
+  select(-length) |> 
+  
+  # Relocate the new column to appear after the 'finish' column:
+  relocate(measurement_length_s, .after = finish)
+  
+# Remove datasets that are no longer necessary:
+rm(list = c("finish_start_valid", "P61", "P68"))
+```
+
+Now, when the first condition is met, I am going to check the second condition ensuring that the total interaction length equals the total engagement length for each participant using `group_by()` and `summarise()` functions.
+
+```{r}
+interaction_engagement_valid <- communication_clean |> 
+  
+  # Filter out unnecessary measurement values:
+  filter(measurement != "Backchanneling") |> 
+  
+  # Group the data by each participant and each measurement type to
+  # calculate the total duration for each combination of participant and 
+  # measurement:
+  group_by(participant_id, measurement) |> 
+  
+  # Round total duration values to three decimal places to avoid 
+  # floating-point precision errors.
+  # Drop the grouping after calculation:
+  summarise(total_length = round(sum(measurement_length_s),3), 
+            .groups = "drop") |> 
+  
+  # Pivot the table so that interaction and engagement duration 
+  # are in separate columns: 
+  pivot_wider(names_from = measurement, values_from = total_length) |> 
+  
+  # Add a new column to compare length of each measurement for each participant:
+  mutate(length_valid = Interaction == Engagement) 
+
+# Are there any mismatched length values?
+interaction_engagement_valid |> 
+  filter(length_valid == FALSE) |> 
+  nrow()
+
+# 44 participants out of 59 have mismatched length values. 
+# How large are these differences?
+interaction_engagement_valid |>
+  
+  # Filter only for mismatched values: 
+  filter(length_valid == FALSE) |> 
+  
+  # Calculate how large the differences between mismatched values are.
+  # Express differences as percentages and ensure they are positive:
+  mutate(difference = abs((Interaction - Engagement)/Interaction * 100)) |> 
+  
+  # Visualise differences using a histogram: 
+  ggplot(aes(x = difference)) +
+  geom_histogram()
+
+# Fortunately, most of the differences are quite small.
+
+# Remove the dataset to keep things tidy:
+rm("interaction_engagement_valid")
+```
+
+Out of 59 participants, **44 have mismatched total interaction and engagement lengths.** However, the histogram above shows that most differences are minimal (\<0.5%), suggesting that there was no significant data loss.
+
+Instead, these discrepancies are likely due to minor inconsistencies in the `start` and `finish` times across different fields, leading to slightly different `length` values. The inconsistencies may arise from one or both of the following scenarios:
+
+1.  **Within engagement measurements**: Overlapping or disconnected `start` and `finish` times between individual engagement periods may slightly inflate or reduce the total engagement length.
+
+2.  **Between interaction and engagement measurements**: The `start` and `finish` times for interaction may not align perfectly with the summed engagement `start` and `finish` times.
+
+Although these differences appear negligible and are unlikely to impact the analysis significantly, I have decided to address them. I start with the second scenario and check for inconsistencies in the timing between interaction and engagement measurements:
+
+```{r}
+# First, I extract the minimum `start` and maximum `finish` times for 
+# each participant's interaction.   
+# I create a new dataset called `interaction_boundaries` to store this data:
+interaction_boundaries <- communication_clean |> 
+  
+  # Filter for interaction measurements only:
+  filter(measurement == "Interaction") |> 
+  
+  # Group the data by participant to calculate time boundaries:
+  group_by(participant_id) |>  
+  
+  # Summarise the earliest start and latest finish times.
+  # Why do I need to do that? Even though in most cases each participant only have 
+  # one measurement for interaction, some participants have several measurements 
+  # (for some of the participants interaction was interrupted)
+  summarize(min_start_in = min(start), 
+            max_finish_in = max(finish))
+
+# Similarly, I extract the minimum start and maximum finish times for each participant's 
+# engagement and store them in a new dataset called `engagement_boundaries`:
+engagement_boundaries <- communication_clean |> 
+  
+  # Filter for engagement measurements only:
+  filter(measurement == "Engagement") |> 
+  
+  # Group the data by participant to calculate time boundaries:
+  group_by(participant_id) |> 
+  
+  # Summarise the earliest start and latest finish times:
+  summarise(min_start_en = round(min(start), 3), 
+            max_finish_en = round(max(finish), 3))
+
+# To compare these boundaries, I combine the two datasets into a single one:
+boundaries_compare <- interaction_boundaries |>  
+  left_join(engagement_boundaries, by = "participant_id")
+
+# Next, I check for mismatches in the start and finish times for each participant.
+
+# Check if the minimum start times match:
+boundaries_compare |> 
+  filter(round(min_start_in, 3) != round(min_start_en, 3)) |> 
+  nrow()
+# Output: 0 participants have mismatched start times.
+
+# Check if the maximum finish times match:
+boundaries_compare |> 
+  filter(round(max_finish_in, 3) != round(max_finish_en, 3)) |> 
+  nrow()
+# Output: 43 participants have mismatched finish times.
+
+# Now, I check if the engagement measurements are consistently shorter 
+# than interaction measurements:
+boundaries_compare |> 
+  filter(max_finish_in > max_finish_en) |> 
+  nrow()
+# Output: Engagement measurements are shorter for all 43 participants.
+
+# Finally, I clean up by removing temporary datasets:
+rm(list = c("boundaries_compare", "engagement_boundaries", "interaction_boundaries"))
+```
+
+For **43 participants** the summed engagement ended earlier than the interaction, suggesting a systematic issue where the latest engagement period did not fully align with the corresponding interaction ending time.
+
+To address this, I adjust the finish times of the last engagement measurement for each participant to align with the corresponding interaction ending time using `mutate()` and `if_else()` functions:
+
+```{r}
+communication_clean <- communication_clean |> 
+  
+  # Group by participant
+  group_by(participant_id) |> 
+  
+  # Then use transformation with the condition that the value finish should be the highest
+  # within engagement measurements for a given participant.
+  # If condition is met, replace the finish value with the measurement length value.
+  # If condition is not met leave it as it is.
+  mutate(
+    finish = if_else(
+      measurement == "Engagement" & finish == max(finish[measurement == "Engagement"]),
+      max(finish[measurement == "Interaction"]),
+      finish
+    )
+  ) |> 
+  ungroup() |> 
+  
+  # Recalculate length
+  mutate(measurement_length_s = finish - start)
+```
+
+After this, I check if the total number of mismatched values has been reduced:
+
+```{r}
+interaction_engagement_valid <- communication_clean |>
+  
+  # I have used this code before so for more detailed explanation see above. 
+  filter(measurement != "Backchanneling") |> 
+  group_by(participant_id, measurement) |> 
+  summarise(total_duration = round(sum(measurement_length_s), 3), 
+            .groups = "drop") |> 
+  pivot_wider(names_from = measurement, values_from = total_duration) |> 
+  mutate(duration_valid = Interaction == Engagement)
+
+# Check how many mismatched values remain:
+interaction_engagement_valid |> 
+  filter(!duration_valid)
+```
+
+At this point, there are only **5 mismatched values** remaining. Let's take a closer look at them:
+
+```{r}
+communication_clean |> 
+  filter(participant_id %in% c("P58(1)", "P46(1)", "P2", "P64(1)", "P67(1)") &
+           !str_detect(measurement, "Backchanneling"))
+```
+
+After investigating each case individually, I identify where the issues are and how to resolve them (see Table 3).
+
+[Table 3. Summary of remaining issues and corresponding solutions]{.underline}
+
++-------------+--------------------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------+
+| Participant | Issue                                                                                                                                            | Solution                                                           |
++=============+==================================================================================================================================================+====================================================================+
+| P2          | Two separate interaction measurements. As a result, the finish time of the last engagement period within the first interaction was not adjusted. | Correct the latest engagement within the first interaction period. |
++-------------+--------------------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------+
+| P46         | Two seperate interaction measurements. As a result, the finish time of the last engagement period within the first interaction was not adjusted. | Correct the latest engagement within the first interaction period. |
++-------------+--------------------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------+
+| P58         | Time gap between two engagement periods.                                                                                                         | Remove the gap time from the interaction.                          |
++-------------+--------------------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------+
+| P64         | Time gap between two engagement periods.                                                                                                         | Remove the gap time from the interaction.                          |
++-------------+--------------------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------+
+| P67         | Two seperate interaction measurements. As a result, the finish time of the last engagement period within the first interaction was not adjusted. | Correct the latest engagement within the first interaction period. |
++-------------+--------------------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------+
+
+For participants with two interaction measurements (**P2**, **P46**, and **P67**), the finish time of the engagement period must align with the end of the first part of the interaction. For participants with time gaps between two engagement periods (**P58** and **P64**), interaction duration must be adjusted to exclude the gap time, as it cannot be definitively attributed to either engagement period. Since there are only 5 data points that needs to be corrected, I do it manually using data from the tibble above and functions `mutate()` and `case_when()`:
+
+```{r}
+communication_clean <- communication_clean |> 
+  mutate(
+    finish = case_when(
+      
+      #  Adjust the finish time for the engagement measurement of "P2":
+      measurement == "Engagement" & 
+        participant_id == "P2" & finish == 690.400 ~ 690.411,
+      
+      # Adjust for engagement measurement of "P46(1)":
+      measurement == "Engagement" & 
+        participant_id == "P46(1)" & finish == 378.800 ~ 378.810, 
+      
+      # Adjust for engagement measurement of "P67(1)":
+      measurement == "Engagement" & 
+        participant_id == "P67(1)" & finish == 165.477 ~ 165.478,
+      
+      # In all the other cases keep the original value:
+      TRUE ~ finish
+    ), 
+  ) |> 
+  mutate(
+    
+    # Recalculate duration for all rows
+    measurement_length_s = finish - start,
+    
+    measurement_length_s = case_when(
+      
+      # Override duration for "P58(1)" interaction with a total engagement value:
+      participant_id == "P58(1)" & measurement == "Interaction" ~ 453.700, 
+      
+      # Override duration for "P64(1)" interaction with a total engagement value: 
+      participant_id == "P64(1)" & measurement == "Interaction" ~ 224.088, 
+      TRUE ~ measurement_length_s
+    )
+  )
+```
+
+Finally (that was a long run), I check if my efforts were successful and all values now match:
+
+```{r}
+interaction_engagement_valid <- communication_clean |> 
+  filter(measurement != "Backchanneling") |> 
+  group_by(participant_id, measurement) |> 
+  summarise(total_duration = round(sum(measurement_length_s), 3), .groups = "drop") |> 
+  pivot_wider(names_from = measurement, values_from = total_duration) |> 
+  mutate(duration_valid = Interaction == Engagement)
+
+# Check if there are any remaining mismatched values:
+interaction_engagement_valid |> 
+  filter(!duration_valid) |> 
+  nrow()
+# 0 rows - Yes!
+
+# Clear space and remove `interaction_engagement_valid` dataset
+rm("interaction_engagement_valid")
+```
+
+With the last transformation, our second condition has been met and we can move on to the third and final condition. Here everything is much easier. Each individual backchanneling measurement represents a single backchannel response and its 'length' should be equal to 1. Let's make this happen using `mutate()` and `if_else()` functions:
+
+```{r}
+# Ensure backchanneling duration is always 1 second:
+communication_clean <-  communication_clean |> 
+  mutate(
+    measurement_length_s = if_else(
+      str_detect(measurement, "Backchanneling"), 
+      1, 
+      
+      # # Keep the recalculated duration for other rows
+      measurement_length_s
+    )
+  )
+
+# Let's check if that worked:
+communication_clean |> 
+  filter(str_detect(measurement, "Backchanneling") & measurement_length_s != 1) |> 
+  nrow()
+# 0 observations - It worked! 
+```
+
+Now that all the conditions have been met, I can confidently say the data is **accurate** and **consistent across fields**. The only task left is to remove the unnecessary start and finish columns, leaving only the **relevant** data for analysis.
+
+```{r}
+communication_clean <- communication_clean |> 
+  
+  # Drop columns no longer needed:
+   select(-c(start, finish))  
+```
+
+That being done we can move to the next variable.
+
+### Variable `type`
+
+The `type` variable indicates the engagement level for each engagement period, as well as the specific utterance for each instance of backchanneling (e.g., *hmmm*, *yeah*, *right* etc.). The engagement levels - *High*, *Low*, or *Swap* (see Table 4) were defined in relation to the task that was at the core of each interaction. For further details, see my Honours Project (Section *Methods: Dyadic Interactions*).
+
+[Table 4. Summary of Engagement Levels. For full definitions, see my Honours Project (Section *Methods: Appendix Methods*).]{.underline}
+
++----------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| **Engagement Level** | **Definition**                                                                                                                                                                                                                      |
++----------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| High                 | Participant frequently engages with their interaction partner, asks questions, responses, backhannels etc.                                                                                                                          |
++----------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Swap                 | Participant switches task roles with their interaction partner (i.e., they take on the role of the demonstrator). For further details about the interaction roles, see my Honours Project (Section *Methods: Dyadic interactions*). |
++----------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Low                  | Participant does not/rarely engages with their interaction partner, asks questions, responses, backhannels etc.                                                                                                                     |
++----------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+Since the `type` variable contains two distinct types of data, I decide to restructure it.
+
+First, I check that the engagement data is complete and clean:
+
+```{r}
+communication_clean |> 
+  
+  # Filter for "Engagement" measurements
+  filter(measurement == "Engagement") |> 
+  
+  # Identify unique values in the type column
+  distinct(type)
+```
+
+The data is **complete**, with no missing values. However, there are some duplicates, likely caused by leading or trailing whitespace. Let’s remove those extra witespaces using `trimws()` function:
+
+```{r}
+communication_clean <- communication_clean |> 
+  
+  # Remove leading/trailing whitespaces from the `type` column:
+  mutate(
+    type = trimws(type), 
+    )
+communication_clean |> 
+  filter(measurement == "Engagement") |> 
+  distinct(type)
+```
+
+With the duplicates removed, the data is now **accurate** and **falls within the acceptable range of values**. As the data doesn’t follow a **specific structure**, I can proceed without any further changes.
+
+Next, I move the engagement level information from the `type` variable into the `measurement` variable, making sure each engagement period displays its engagement level in parentheses using `mutate()`, `if_else()`, and `paste()` functions:
+
+```{r}
+communication_clean <- communication_clean |> 
+  
+  # Update the `measurement` column with the information from the `type` column:
+  mutate(
+    measurement = if_else(
+      
+      # If the measurement is "Engagement"
+      measurement == "Engagement", 
+      
+      # Append the type value within brackets:
+      paste(measurement, " ", "(", type, ")", sep = ""),
+      
+      # If not leave as it is:
+      measurement
+    )
+  )
+
+# Check that the change was successful:
+unique(communication_clean$measurement)
+# Success!
+```
+
+Finally, I convert the `measurement` variable back to a factor to ensure it still **matches the correct data type**:
+
+```{r}
+communication_clean <- communication_clean |> 
+  
+  # Convert `measurement` to a factor:
+  mutate(measurement = as.factor(measurement))
+```
+
+Now that the engagement level has been incorporated into the `measurement` field, I tidy the `type` column so it only contains backchannel responses using the `case_when()` function:
+
+```{r}
+communication_clean <- communication_clean |> 
+  mutate(type = case_when(
+    !str_detect(measurement, "Backchanneling") ~ NA, 
+    str_detect(measurement, "Backchanneling") & type == "" ~ "Unknown",
+    TRUE ~ type
+  ))
+```
+
+Next, I work through each backchanneling category one by one to check and refine the responses.
+
+Starting with the **Laugh** group:
+
+```{r}
+communication_clean |> 
+  filter(measurement == "Backchanneling (Laughs)") |> 
+  group_by(type) |> 
+  summarise(count = n()) |> 
+  arrange(desc(count), .by_group = TRUE)
+```
+
+I see that there are no distinct backchannel responses in this group — all values are blank, and therefore labelled as "Unknown". I replace these with "Laugh" using `if_else()`:
+
+```{r}
+communication_clean <- communication_clean |> 
+  mutate(type = if_else(
+    measurement == "Backchanneling (Laughs)", 
+    "Laugh", 
+    type
+  ))
+
+communication_clean |> 
+  filter(measurement == "Backchanneling (Laughs)") |> 
+  distinct(type) 
+```
+
+Next, I check the **Short Phrases** group:
+
+```{r}
+communication_clean |> 
+  filter(measurement == "Backchanneling (Short Phrases)") |> 
+  group_by(type) |> 
+  summarise(count = n()) |> 
+  arrange(desc(count), .by_group = TRUE)
+```
+
+This group is quite small, with the highest count being a repetition of the interaction partner’s utterance ("rep") and the rest being interjections of various short phrases. Thus, I decide to split the data into two categories:
+
+1.  Short Phrase Repetition
+
+2.  Short Phrase Interjection
+
+I update these using `case_when()`:
+
+```{r}
+communication_clean <- communication_clean |> 
+  mutate(type = case_when(
+    measurement == "Backchanneling (Short Phrases)" & type == "rep" ~ 
+      "Short Phrase Repetition", 
+    measurement == "Backchanneling (Short Phrases)" & type != "rep" ~ 
+      "Short Phrase Interjection",
+    TRUE ~ type
+  ))
+
+communication_clean |> 
+  filter(measurement == "Backchanneling (Short Phrases)") |> 
+  distinct(type) 
+```
+
+Then, I move on to the **Lexical Speech** group:
+
+```{r}
+communication_clean |> 
+  filter(measurement == "Backchanneling (Lexical Speech)") |> 
+  group_by(type) |> 
+  summarise(count = n()) |> 
+  arrange(desc(count), .by_group = TRUE)
+```
+
+I notice several variations of "yes" (yeah, yep, aye, aye-yeah). I group them together and leave everything else as it is:
+
+```{r}
+communication_clean <- communication_clean |> 
+  mutate(type = case_when(
+    measurement == "Backchanneling (Lexical Speech)" & 
+      type %in% c("yes", "yep", "yeah", "aye", "aye-yeah") ~ 
+      "yes (including informal variants)",
+    TRUE ~ type
+  ))
+
+communication_clean |> 
+  filter(measurement == "Backchanneling (Lexical Speech)") |> 
+  distinct(type) 
+```
+
+Next up is the **Non-lexical Speech** group:
+
+```{r}
+communication_clean |> 
+  filter(measurement == "Backchanneling (Non-lexical Speech)") |> 
+  group_by(type) |> 
+  summarise(count = n()) |> 
+  arrange(desc(count), .by_group = TRUE)
+```
+
+Since it’s difficult to reliably distinguish what each sound means (e.g. mhmmm, mh, hm), I group them all under "Non-lexical Vocalisation":
+
+```{r}
+communication_clean <- communication_clean |> 
+  mutate(type = case_when(
+    measurement == "Backchanneling (Non-lexical Speech)"  ~ "Non-lexical Vocalisation",
+    TRUE ~ type
+  ))
+
+communication_clean |> 
+  filter(measurement == "Backchanneling (Non-lexical Speech)") |> 
+  distinct(type) 
+```
+
+Finally, I check the overall field to make sure there are no outstanding issues:
+
+```{r}
+communication_clean |> 
+  distinct(type)
+```
+
+Everything looks good - the data is **relevant**, **complete**, **accurate**, and is **within the acceptable range of values**. The last step is to convert column to a factor and rename the column to something clearer like `backchannel_response`:
+
+```{r}
+communication_clean <- communication_clean |> 
+  rename(backchannel_response = type) |> 
+  mutate(backchannel_response = as.factor(backchannel_response))
+```
+
+### Variable `participant_id`
+
+The final variable in this dataset is the `participant_id`. This variable is essential for my analysis as it will be used as a key to join `communication` and `rapport` datasets together.
+
+First, I check what the values look like and if there are any missing values.
+
+```{r}
+# Investigate the field:
+unique(communication_clean$participant_id)
+
+# Check for missing values:
+sum(is.na(communication_clean$participant_id))
+```
+
+There are no missing values, indicating that the data is **complete**. However, since participant IDs in this table come from file names, they do not follow a simple numeric format. Instead, they appear as "P" followed by the ID number, sometimes with "(1)" at the end. To extract just the numeric part, I use `str_extract()` function:
+
+```{r}
+communication_clean <- communication_clean |> 
+  
+  # str_extract function extracts the first match of a pattern 
+  # from a string:
+  # "\\d+" is a regular expression pattern with "\\d" referring to 
+  # any digit, and "+" meaning one or more of the preceding character.
+  mutate(participant_id = str_extract(participant_id, "\\d+")) |> 
+  
+  # Finally, I transform the character values into numeric vectors:
+  mutate(participant_id = as.numeric(participant_id))
+```
+
+This pulls out the numbers and converts them to a numeric format, ensuring the field is **correctly structured** and **matches the numeric data type**.
+
+Finally, the values in this field should fall between 1 and 72, and each number should be unique with no repetitions due to trailing whitespaces:
+
+```{r}
+communication_clean |> 
+  filter(participant_id > 72 | participant_id < 1)
+# 0 values - which means all values fall within the range of 1 to 72.
+
+communication_clean |>
+  distinct(participant_id) |> 
+  arrange(participant_id)
+
+# There are 59 unique participants which matches the number of participants who 
+# were included in my research project. 
+```
+
+All ID numbers fall **within the acceptable range** and seem to be **accurate** with the total number of unique ID numbers matching the total number of participants (= 59).
+
+With that, the data validation and cleaning up for the `communication` dataset is complete and we can remove the original dataset with the cleaned data stored in `communication_clean`:
+
+```{r}
+rm(communication)
+```
+
+## Data Aggregation
+
+Now that I have cleaned and validated data from the `communication` dataset, I can safely transform it into a more useful format for analysis. I start by summarising the `measurement_length_s` values by `participant_id` and `measurement` using the `group_by()` and `summarise()` functions. I create a new dataset called `communication_long` to store the aggregated data.
+
+Since there isn’t enough statistical power to analyse each category of backchanneling individually, I decide to combine all of them into a single group — `Backchanneling`.
+
+```{r}
+communication_long <- communication_clean |>
+  mutate(
+    measurement = if_else(str_detect(measurement, "Backchanneling"), 
+                          "Backchanneling", 
+                          measurement)
+  ) |>
+  group_by(participant_id, measurement) |>
+  summarise(total_measurement_length_s = sum(measurement_length_s), .groups = "drop")
+
+```
+
+The data in the `communication_long` is presented in **long format**, where each row represents a unique observation type, with multiple rows corresponding to a single participant. To ensure only a single row corresponds to each participant, I convert the data to a **wider format** using `pivot_wider()` function. I store the newly formatted data in a dataset called `communication_wide`:
+
+```{r}
+communication_wide <- communication_long |> 
+  
+  pivot_wider(id_cols = participant_id,
+              values_from = total_measurement_length_s, 
+              names_from = measurement) 
+```
+
+To check if my transformation was successful, I look at how many unique participant IDs are in the dataset using use `unique()` and `length()` functions. I expect to find 59 unique values:
+
+```{r}
+length(unique(communication_wide$participant_id))
+```
+
+As expected, there are 59 unique participants.
+
+I now have the data in two formats — wide and long — both of which are useful at different stages of analysis and data sharing.
+
+Before moving on to the `rapport` dataset, I first focus on the `communication_wide` dataset. Since it stores aggregated data, I use it to complete the following tasks:
+
+1.  Check for any implicit missing values.
+
+2.  Remove the "Swap" periods while accounting for the decrease in interaction length and registering that a role swap occured during the interaction.
+
+3.  Convert measurement lengths from seconds to minutes, ensuring that the total length of all engagement periods still matches the length of the entire interaction.
+
+4.  Calculate the proportion of time each participant spent verbally engaged with their interaction partner, and remove engagement data reported in absolute values.
+
+5.  Calculate the frequency of backchanneling for each participant, and remove backchanneling data reported in absolute values.
+
+Once these steps are complete, I will update the `communication_long` dataset, transferring the modified data from `communication_wide`.
+
+Let's get started.
+
+### Working with Wide Format Data
+
+In the wide format, a participant’s repeated measurements are aggregated into a single row, and each type of measurement is in a separate column.
+
+```{r}
+str(communication_wide)
+```
+
+#### Identifying Implicit Missing Values
+
+Since every row-column combination must contain a value, any implicit missing values (e.g., no interaction measurement for a given participant) will become more apparent. In R, missing values are usually represented as `NA`. Let’s check if there are any `NA` values in the `communication_long` dataset using `is.na()`function:
+
+```{r}
+communication_wide |> 
+  filter(if_any(everything(), is.na)) |> 
+  count()
+```
+
+There are **49 participants** with at least on `NA` value in their measurements. Let's examine these cases more closely:
+
+```{r}
+communication_wide |> 
+  filter(if_any(everything(), is.na)) 
+```
+
+It seems that a large proportion of `NA` values appear in the `Engagement (Swap)` column. In this column, `NA` values should be treated as zeros. I check how many participants still have missing values after excluding this column:
+
+```{r}
+communication_wide |> 
+  select(-`Engagement (Swap)`) |> 
+  filter(if_any(everything(), is.na)) 
+```
+
+Only **4 participants** remain with `NA` values. Similarly, in these four cases, the missing values should instead be treated as zeros. Let's update them all accordingly:
+
+```{r}
+communication_wide <- communication_wide |> 
+  mutate(across(everything(), ~replace_na(.x, 0)))
+```
+
+Now, all `NA` have been replaced with `0`.
+
+#### Handling *Swap* Periods
+
+Since autistic individuals typically show a preference for more restricted patterns of behaviour, I decide to remove all swap periods (when participants switched interaction roles with their partners) from my analysis and focus only on High and Low engagement periods.
+
+Before doing that, I create a new column to indicate whether a participant switched roles during the interaction. The wide-format data is ideal for this since each row corresponds to a single unique participant.
+
+I add a new column to the `communication_wide` dataset containing a logical vector (`TRUE/FALSE`). A swap is recorded if the `Engagement (Swap)` measurement is greater than 0:
+
+```{r}
+communication_wide <- communication_wide |> 
+  mutate(`Swap Occurred` = `Engagement (Swap)` > 0)
+```
+
+I then adjust the `Interaction` column using `mutate()` function to account for the decrease in interaction length caused by removing Swap periods:
+
+```{r}
+communication_wide <- communication_wide |> 
+  
+  mutate(
+    Interaction = round(Interaction, 3) - round(`Engagement (Swap)`, 3)
+    )
+```
+
+With that done, I safely remove the `Engagement (Swap)` column from the aggregated dataset:
+
+```{r}
+communication_wide <- communication_wide |> 
+select(-`Engagement (Swap)`)
+```
+
+#### Converting Time Units
+
+Since the total length of each measurement for a participant is quite large, I convert the units from seconds to minutes by dividing each value by 60 and rounding to two decimal places.
+
+To maintain accuracy, I first convert the length of each engagement type and then use these values to update the `Interaction` column:
+
+```{r}
+communication_wide <- communication_wide |> 
+  
+  mutate(
+    `Engagement (High)` = round(`Engagement (High)` / 60, 2),
+    `Engagement (Low)` = round(`Engagement (Low)` / 60, 2),
+    
+    # To avoid discrepancies between total engagement length
+    # and interaction length due to rounding, I calculate 
+    # interaction length in minutes by summing 
+    # engagement_high_min and engagement_low_min:
+    Interaction = `Engagement (High)` + `Engagement (Low)`
+    
+  ) 
+```
+
+#### Calculating Proportion of Engagement
+
+For my analysis, I'm interested in how much time each participant spends verbally engaging with their interaction partner, relative to the full length of the interaction. So instead of using absolute values, I need proportions. To do that, I divide each `Engagement (High)` value by the `Interaction` value for each participant. I then remove the `Engagement (High)` and `Engagement (Low)` columns, as I no longer need the absolute values:
+
+```{r}
+communication_wide <- communication_wide |> 
+  
+  mutate(
+    `Proportion of Verbal Engagement` = round(`Engagement (High)` / Interaction, 2)
+  ) |> 
+  
+  select(-`Engagement (High)`, -`Engagement (Low)`)
+```
+
+#### Calculating Frequency of Backchanneling
+
+Similarly, I'm also interested in the frequency of backchanneling rather than the absolute number of backchannel responses each participant produced during their interaction. So instead of using absolute values, I need frequencies. To do that, I divide each `Backchanneling` value by the `Interaction` value for each participant. I then remove the `Backchnaneling` column:
+
+```{r}
+communication_wide <- communication_wide |> 
+  
+  mutate(
+    `Rate of Backchanneling` = round(`Backchanneling` / Interaction, 2)
+  ) |> 
+  
+  select(-`Backchanneling`)
+```
+
+### Working with Long Format Data
+
+Now that I have modified the `communication_wide` dataset, I update `communication_long` accordingly:
+
+```{r}
+communication_long <- communication_wide |> 
+  
+  pivot_longer(cols = `Interaction`:`Rate of Backchanneling`,
+               names_to = "measurement", 
+               values_to = "measurement_length") 
+```
+
+Importantly, I include the new `Swap Occurred` column. Since it contains logical data (`TRUE/FALSE`), it is automatically converted to numeric format, where `1 = TRUE` and `0 = FALSE`.
+
+With these steps completed, I'm finished working with aggregated data from the `communication_clean` dataset and can move on to the `rapport` dataset.
+
+## Dataset `rapport` Clean-up
+
+The `rapport` dataset, provided by my project supervisor, contains several variables for each participant. I start by selecting the variables relevant for my analysis, which are:
+
+1.  participant_id,
+
+2.  asc_status,
+
+3.  research_day_condition, and
+
+4.  rubiks_succeed_rapport_total.
+
+I store these in a new dataset called `rapport_clean`:
+
+```{r}
+rapport_clean <- rapport |> 
+  
+  select(participant_id,
+         asc_status,
+         research_day_condition,
+         rubiks_succeed_rapport_total)
+```
+
+Let's have a quick look at the dataset overall structure:
+
+```{r}
+str(rapport_clean)
+```
+
+The dataset contains *4 variables* and *72 observations*. I check if there are any duplicate rows in the dataset:
+
+```{r}
+str(distinct(rapport_clean))
+
+# The same number of observations. 
+```
+
+There are no duplicate rows, so I can start cleaning and validation the data in each field.
+
+### Variable 'participant_id'
+
+The variable `participant_id` serves as the **primary key** for this dataset, meaning it uniquely identifies each row. Since each row corresponds to an individual participant, I first verify that this variable has no missing values, follows a numeric structure and falls within the range of 1 to 72 (inclusive):
+
+```{r}
+# Check for missing values:
+sum(is.na(rapport_clean))
+
+# Check that it is numeric:
+class(rapport_clean$participant_id)
+
+# Positive and falls within 1 and 72
+rapport_clean |> 
+  filter(participant_id < 0 | participant_id > 72)
+
+# 0 values - all values fall within the acceptable range
+```
+
+There are no missing values, and the data is **complete** and **accurate**. The variable **matches the expected numeric data type** and **falls within the acceptable range**. However, there are 72 participants instead of 59. This is because not all of the data is **relevant** as some participants were excluded from my research for one of the following reasons:
+
+1.  Their interaction partner was the researcher.
+
+2.  Their video recording was lost or incomplete.
+
+I will remove these participants later when I will be joining `rapport_clean` and `communication_wide` datasets together.
+
+### Variable `asc_status`
+
+The variable `asc_status` indicates a participant’s ASC (autism spectrum condition) status — either *non-autistic* or *autistic*.
+
+I begin by checking the contents of this field using the `unique()` function:
+
+```{r}
+unique(rapport_clean$asc_status)
+```
+
+There are no missing values or duplicates, confirming that it is **accurate** and **complete** but the data doesn’t fully match the desired labels. Specifically, I want to rename "Neurotypical" to "Non-autistic" using the `case_when()` function:
+
+```{r}
+rapport_clean <- rapport_clean |> 
+  
+  mutate(asc_status = case_when(
+    
+    asc_status == "Neurotypical" ~ "Non-autistic", 
+    
+    TRUE ~ "Autistic"
+  ))
+```
+
+The values now fall within the expected range. I then convert this variable into a factor using `as.factor()`:
+
+```{r}
+rapport_clean <- rapport_clean |> 
+  
+  # Convert `research_day_condition` to a factor:
+  mutate(asc_status = as.factor(asc_status))
+
+# Check the result:
+class(rapport_clean$asc_status)
+levels(rapport_clean$asc_status)
+```
+
+Perfect — everything looks in order. Since this variable does not follow any **specific structure**, all data validation criteria are met and I can move on to the next variable.
+
+### Variable `research_day_condition`
+
+The variable `research_day_condition` indicates the group to which participants belonged (see Table 4).
+
+[Table 4. Summary of research groups.]{.underline}
+
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| **Group**          | **Group Description**                                                                                                                                                                                                                                                                                                                                              |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Non-autistic Group | Both participant and their interaction partner are non-autistic.                                                                                                                                                                                                                                                                                                   |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Mixed Group        | One participant is autistic, and one is non-autistic. The perspective from which backchanneling and engagement data were collected alternated between different pairs — if in one pair this data was collected from the autistic participant while the rapport score was given by the non-autistic partner, then in the next pair, the perspectives were reversed. |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Autistic Group     | Both participant and their interaction partner are autistic.                                                                                                                                                                                                                                                                                                       |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+To start, I check if the data in this field matches the categories above:
+
+```{r}
+unique(rapport_clean$research_day_condition)
+```
+
+The data matches the groups — it is **accurate** and **complete**. However, the labels should be renamed. Let’s do this using the `case_when()` function:
+
+```{r}
+rapport_clean <- rapport_clean |> 
+  
+  mutate(research_day_condition = case_when(
+    
+    research_day_condition == "Single_Neurotypical" ~ "Matched Non-autistic", 
+    
+    research_day_condition == "Single_Autistic" ~ "Matched Autistic", 
+    
+    research_day_condition == "Mixed_Autistic_Neurotypical" ~ "Mixed",
+    
+    TRUE ~ "no_group"
+  ))
+```
+
+Now, the data **falls within the acceptable range of values**. Finally, let’s convert it to a factor using the `as.factor()` function:
+
+```{r}
+rapport_clean <- rapport_clean |> 
+  
+  # Convert `research_day_condition` to a factor:
+  mutate(research_day_condition = as.factor(research_day_condition))
+
+# Check if that worked
+class(rapport_clean$research_day_condition)
+levels(rapport_clean$research_day_condition)
+# Perfect!
+```
+
+Now when this variable is a factor with 3 levels it **matches the data type for this field**. The data does not follow any **specific pattern**, so we are done here and can move on to the final variable.
+
+### Variable `rubiks_succeed_rapport_total`
+
+The rapport scores provided by each participant’s interaction partner are incorrectly matched in the `rapport` dataset. This happened because participants were arranged in a chain, where each person interacted with two others — one *before* them and one *after*. Crucially, all individuals in the chain were participants in the study; no separate “interaction partners” were brought in. Each participant rated their rapport with the *next* participant in the sequence. However, the dataset currently links these scores back to the participant who *gave* them, rather than the one who *received* them. In other words, the rapport values shown reflect how participants felt about someone else — not how someone else felt about them. (See my Honours Project – *Methods: Participants* for more detail.)
+
+To correct this, I will remove the old column and replace it with a corrected version. I first increase each participant's ID by 1 in the original `rapport` dataset to align the rapport scores with the correct recipient. I will then use the `right_join()` function to merge this corrected data with the `rapport_clean` dataset. Finally, I will remove the old, incorrect `rubiks_succeed_rapport_total` column.
+
+```{r}
+rapport_clean <- rapport |> 
+  
+  # Select key for joining datasets and relevant column:
+  select(participant_id, 
+         rubiks_succeed_enjoy,
+         rubiks_succeed_easy,
+         rubiks_succeed_successful, 
+         rubiks_succeed_understood,
+         rubiks_succeed_awkward, 
+         rubiks_succeed_friendly,
+         rubiks_succeed_rapport_total) |> 
+  
+  # Shift each participant ID by +1 to align scores correctly:
+  mutate(participant_id = participant_id + 1) |> 
+  
+  # Rename the column to avoid confusion:
+  rename(rapport_score = rubiks_succeed_rapport_total) |> 
+  
+  # Join with the communication_rapport dataset:
+  right_join(rapport_clean, join_by(participant_id)) |> 
+  
+  # Remove the old, incorrect column:
+  select(-rubiks_succeed_rapport_total)
+```
+
+Now that this correction is complete, I will check whether rapport scores are stored in a numerical format using the `str()` function.
+
+```{r}
+str(rapport_clean$rapport_score)
+```
+
+Currently, it is in a string format. I am going to fix this using `as.numeric()` function:
+
+```{r}
+rapport_clean <- rapport_clean |> 
+  mutate(rapport_score = as.numeric(rapport_score))
+
+# Check if transformation was successful:
+glimpse(rapport_clean$rapport_score)
+```
+
+The data now **matches the expected type**.
+
+When that was done, a warning message appeared indicating that some values have been transformed into `NA` values. This makes sense, as a few participants interacted with the researcher and did not provide a rapport score:
+
+```{r}
+rapport_clean |> 
+  filter(is.na(rapport_score))
+```
+
+These participants were excluded from the research and will be excluded from the analysis when I join the `rapport_clean` and `communication_wide` datasets together in the Section: *Data Join*, so I leave them for now.
+
+Next, I verify that all values are non-negative using logical variable `< 0`:
+
+```{r}
+rapport_clean |> 
+  
+  filter(
+    rapport_score < 0
+  )
+```
+
+There are no negative values, confirming that the data is **complete**, **accurate** and **falls within the acceptable range**. The data does not follow any **specific structure** so this criterion does not apply here.
+
+With that, the data validation and cleaning up for the `rapport` dataset is complete and we can remove the original dataset:
+
+```{r}
+rm(rapport)
+```
+
+## Data Join
+
+Now that I’ve cleaned both the `communication` and `rapport` datasets, and reformatted the `communication` data, I can combine them for the analysis. Using the `participant_id` column as the key, I join the `communication_wide` and `rapport_clean` datasets, storing the combined data in a new dataset called `communication_rapport`:
+
+```{r}
+communication_rapport <- communication_wide |> 
+  
+  left_join(rapport_clean, join_by(participant_id))
+```
+
+With this step completed, only the data relevant for the analysis is included.
+
+### Renaming and Organising Columns
+
+As a final touch before analysis, I rename and reorganise the `communication_rapport` columns to make them clearer and more representative of the information they hold.
+
+I place the participant ID at the start, followed by the participant’s group. Next, I add the communication-related variables, and finally, the rapport scores given by participants’ interaction partners:
+
+```{r}
+communication_rapport <- communication_rapport |> 
+  
+  rename(backchanneling_freq = `Rate of Backchanneling`,
+         engagement_prop = `Proportion of Verbal Engagement`, 
+         interaction_min = Interaction,
+         swap_y_n = `Swap Occurred`,
+         research_group = research_day_condition) |> 
+  
+  select(participant_id,
+         asc_status,
+         research_group, 
+         interaction_min, 
+         engagement_prop,
+         backchanneling_freq, 
+         swap_y_n,
+         rapport_score)
+```
+
+With this, I am ready to analyse my data.
+
+# Analysing Data
+
+At this stage of the data analysis, it’s time to go through my clean data, explore it, and check whether the predictions I made earlier hold up. The **analysis phase** is at the core of any data analysis project.
+
+In this project, I compare autistic, non-autistic, and mixed pairs across four key variables: interaction, rapport, engagement, and backchanneling.
+
+I also look into the relationship between engagement and rapport, as well as backchanneling and rapport, and test whether either of these variables can predict the rapport score given by the participant’s interaction partner — both overall and within each group individually.
+
+Additionally, I investigate whether the switch in interaction roles occurs across the groups with the same frequency.
+
+Before diving into the analysis, I want to go through the statistical tests I used to analyse my data.
+
+## Overview of Statistical Methods
+
+Since I applied many of the statistical tests multiple times, it made sense to write them as functions rather than repeating the same code over and over. This way, I could keep things efficient and consistent.
+
+For each statistical test, I’ll walk through:
+
+1.  Why I chose it.
+
+2.  The assumptions behind it and how I checked them.
+
+3.  How to interpret the output of each function used for the test.
+
+### Spotting Outliers: Why It Matters
+
+Before I go over the statistical tests I used to analyse my data, I want to briefly focus on outliers — those extreme values that can sometimes throw off results. If there are extreme values in the data, they can distort the results in ways that make it harder to trust the findings. This is especially relevant since I use tests like *one-way ANOVA* and *linear regression*, which are particularly sensitive to outliers. So, before running any tests, I needed to assess whether my dataset contained any outliers, and how severe they might be.
+
+To identify outliers, I built a function that differentiates between mild and extreme outliers. For context, in my dissertation, I followed Halldestam’s (2016) method of defining them:
+
+-   **Mild outliers** are values that fall just outside the usual range (lie beyond ±1.5 times the interquartile range (IQR) but remain within the outer fences of the boxplot).
+
+-   **Extreme outliers** are values that sit far beyond what’s expected (outside the outer fences of the boxplot) and can significantly impact the analysis.
+
+These “outer fences” are calculated as:
+
+-   Lower outer fence = Q1 − (3 × IQR)
+
+-   Upper outer fence = Q3 + (3 × IQR),
+
+where: Q1 and Q3 are the first and third quartiles, representing the 25th and 75th percentiles of the data; and IQR (interquartile range) is the spread between Q1 and Q3, covering the middle 50% of the data.
+
+By systematically identifying and classifying outliers, I was able to make informed decisions about whether to transform the data, exclude certain points (not a favorable approach when working with human data in my opinion), or simply be mindful of their influence on the analysis.
+
+Here’s the function I wrote to identify and classify outliers. :
+
+```{r}
+identify_outliers <- function(data, group_var, response_var) {
+  
+  data |> 
+    group_by({{ group_var }}) |>  
+    
+    mutate(
+      
+      q1 = quantile({{ response_var }}, 0.25, na.rm = TRUE),
+      q3 = quantile({{ response_var }}, 0.75, na.rm = TRUE),
+      iqr = q3 - q1,
+      mild_threshold_low = q1 - 1.5 * iqr,
+      mild_threshold_high = q3 + 1.5 * iqr,
+      extreme_threshold_low = q1 - 3 * iqr,
+      extreme_threshold_high = q3 + 3 * iqr,
+      
+      outlier_type = case_when(
+        {{ response_var }} < extreme_threshold_low | 
+        {{ response_var }} > extreme_threshold_high ~ "Extreme",
+        {{ response_var }} < mild_threshold_low | 
+        {{ response_var }} > mild_threshold_high ~ "Mild",
+        TRUE ~ "None"
+      )
+    ) |> 
+    
+    filter(outlier_type != "None") |> 
+    
+    ungroup() |> 
+    
+    select({{ group_var }}, {{ response_var }}, outlier_type) |> 
+    
+    arrange({{ group_var }})
+}
+```
+
+To use this function, you need to specify:
+
+1.  your dataset (`data`),
+
+2.  the grouping variable - the *categorical* *variable* that defines the groups (`group_var`), and
+
+3.  the response variable - the *continuous* *variable* you want to investigate (`response_var`).
+
+The function returns a subset of the data, containing only the identified outliers and their assigned class ("Mild" or "Extreme").
+
+### One-way ANOVA
+
+A one-way ANOVA (analysis of variance) test is a parametric test designed to compare k number of groups. In my case, I had three groups — autistic, non-autistic, and mixed — so this was the most appropriate statistical test to compare these groups across .
+
+#### Checking Assumptions
+
+Since I used one-way ANOVA to analyse most variables in this project, I want to go over the key assumptions that need to be met before using it. For one-way ANOVA test's output to be valid and trustworthy, the data needs to meet the following assumptions (in order of importance):
+
+1.  **Random Sampling** - Each participant in the population should have an equal chance of being selected.
+
+2.  **Independence** – Each observation should be independent of the others (no *pseudoreplication*).
+
+3.  **Homogeneity of variance** – The spread of data across groups should be roughly the same.
+
+4.  **Normality** – The data within each group should be roughly normally distributed.
+
+The first two assumptions depend on the research design and how the data was collected, so there’s not much you can do about them *post hoc*. But the last two — homogeneity of variance and normality — can (and should) be checked using the data itself. To do this, I wrote two functions.
+
+##### Visual Inspection with Boxplots
+
+The first function creates boxplots for each group. Boxplots are a quick way to spot potential problems — like if one group has a much wider spread than the others or if there’s a strong skew in the data.
+
+```{r}
+plot_boxplots <- function(data, group_var, response_var) {
+  
+  ggplot(data, aes(x = {{ group_var }}, y = {{ response_var }})) +
+    
+    # Plot boxplots:
+    geom_boxplot(outliers = FALSE) +
+    
+    # Plot individual data points:
+    geom_jitter(width = 0.1) +
+    
+    theme_minimal() +
+    
+    # substitute(): captures the name of the variable passed as 
+    # the function argument 
+    # as.character(): converts the name intro a character string 
+    # so it can be displayed as the label
+    labs(title = "Boxplots of Response Variable by Group",
+         x = as.character(substitute(group_var)),
+         y = as.character(substitute(response_var)))
+}
+```
+
+To use this function, (similarly to the function `identify_outliers`) you need to provide:
+
+1.  the dataset (`data`),
+
+2.  the grouping variable (`group_var`), and
+
+3.  the response variable (`response_var`).
+
+The function returns a boxplot for each group. You can use them to visually check if the groups have a similar spread and distribution.
+
+##### Analysis with Diagnostic Plots
+
+The second function digs deeper into the assumptions of normality and equal variance. It does this by plotting two diagnostic plots for your model:
+
+1.  **Residuals vs Fitted** **Plot** – This helps to check if variance is roughly equal across groups. Ideally, you would expect a random scatter of points without any distinct pattern. If you see a fan or bow tie shaped spread, this suggests a violation of homogeneity of variance.
+
+2.  **Q-Q Plot** – This checks if the residuals follow a normal distribution. If the points follow the diagonal line closely, this suggests that the normality assumption holds. Significant deviations from the line would suggest non-normality.
+
+```{r}
+run_diagnostic_plots <- function(data, group_var, response_var, 
+log_transformation = FALSE, sqrt_transformation = FALSE) {
+  
+  # Fit the original model
+  data.lm <- lm(data[[response_var]] ~ data[[group_var]], data = data)
+  
+  # Conditionally fit log-transformed model
+  if (log_transformation) {
+  data.lm.log <- lm(log(data[[response_var]]) ~ data[[group_var]], data = data)
+  }
+  
+  # Conditionally fit sqrt-transformed model
+  if (sqrt_transformation) {
+  data.lm.sqrt <- lm(sqrt(data[[response_var]]) ~ data[[group_var]], data = data)
+  }
+  
+  # Always plot the original model
+  par(mfrow = c(1, 2))  # Arrange plots side by side
+  plot(data.lm, which = c(1, 2), main = "Original Model")
+  
+  # Conditionally plot log transformation
+  if (log_transformation) {
+    par(mfrow = c(1, 2)) 
+    plot(data.lm.log, which = c(1, 2), main = "Log-transformed Model")
+  }
+  
+  # Conditionally plot sqrt transformation
+  if (sqrt_transformation) {
+    par(mfrow = c(1, 2)) 
+    plot(data.lm.sqrt, which = c(1, 2), main = "Square Root-transformed Model")
+  }
+}
+```
+
+To use this function, you need to specify:
+
+1.  the dataset (`data`),
+
+2.  the grouping variable (in quotes: "`group_var`"),
+
+3.  the response variable (in quotes: "`response_var`"), and
+
+4.  whether you want to apply log and/or square root transformations (`log_transformation = TRUE` or/and `sqrt_transformation = TRUE`).
+
+If the first plot shows a clear pattern (e.g., the spread increases/decreases as the values increase/decrease, or one group has a much larger variance), it suggests a violation of the homogeneity of variance assumption.
+
+If the second plot shows points deviating significantly from the diagonal line, it indicates that the normality assumption may not hold.
+
+If either assumption is violated, there are two main options:
+
+1.  **Apply a transformation** – Log or square root transformations can sometimes help equalise variance and improve normality (both options are available in the function).
+
+2.  **Proceed with caution** – If transformations don’t resolve the issue, it's important to acknowledge the violation and interpret results carefully.
+
+If no data transformation is effective, the p-value obtained from the test may be affected. A violation of the normality assumption can slightly increase or decrease the p-value, though the effect is usually small. However, if the assumption of equal variance is violated, there is a higher risk of incorrectly rejecting the null hypothesis (i.e., an increased likelihood of a *Type I error*).
+
+By running these functions before performing ANOVA, I was able to check whether my data met the necessary assumptions. If the assumptions weren’t met, I considered transformations or kept the violations in mind when conducting the test and interpreting the results.
+
+#### Conducting the Test
+
+After checking that the assumptions were met (or at least keeping any violations in mind), I ran a one-way ANOVA to compare the differences in my response variable across the three groups (autistic, non-autistic, and mixed). The function I wrote allows for flexibility in running the test with either the original data or transformed versions if needed:
+
+```{r}
+run_one_way_anova <- function(data, group_var, response_var, method) {
+  
+  # Check if method is valid
+  if (!method %in% c("original", "log", "sqrt")) {
+    stop("Invalid method. Choose one of: 'original', 'log', or 'sqrt'.")
+  }
+  
+  # Fit the model based on the chosen method
+  if (method == "original") {
+    data.lm <- lm(data[[response_var]] ~ data[[group_var]], data = data)
+    anova(data.lm)
+    
+  } else if (method == "log") {
+    data.lm.log <- lm(log(data[[response_var]]) ~ data[[group_var]], data = data)
+    anova(data.lm.log)
+    
+  } else if (method == "sqrt") {
+    data.lm.sqrt <- lm(sqrt(data[[response_var]]) ~ data[[group_var]], data = data)
+    anova(data.lm.sqrt)
+  }
+}
+```
+
+The function requires 4 inputs:
+
+1.  The dataset (`data`),
+
+2.  The grouping variable ("`group_var`"), which defines the categories being compared,
+
+3.  The response variable ("`response_var`"), which is the variable being analysed,
+
+4.  The transformation method ("`method`"), which can be: "`original`", "`log`", or "`sqrt`" . Depending on the chosen method:
+
+    -   If "`original`" is selected, it fits a standard linear model (lm) using the raw data and performs an ANOVA on it.
+
+    -   If "`log`" is selected, it applies a log transformation to the response variable before fitting the model.
+
+    -   If "`sqrt`" is selected, it applies a square root transformation before fitting the model.
+
+The function returns the **ANOVA table**, which includes key statistical values such as the **F-statistic** and **p-value**. These results help assess the likelihood of a real difference between at least two of the groups. For my approach to interpreting p-values, see *p-values Interpretation* section.
+
+#### Tukey HSD Post-hoc Test
+
+If there is enough evidence to reject the null hypothesis, I would conduct a Tukey HSD (honestly significant difference) post-hoc analysis to determine which groups differ. The function I wrote allows for flexibility in transformation, ensuring that the test can be applied to original, log-transformed, or square root-transformed data.
+
+```{r}
+run_tukey_hsd <- function(data, group_var, response_var, method) {
+  
+  # Check if the chosen method is valid
+  if (!method %in% c("original", "log", "sqrt")) {
+    stop("Invalid method. Choose from: 'original', 'log', or 'sqrt'.")
+  }
+  
+  # Fit the model based on the selected transformation
+  formula <- as.formula(paste(response_var, "~", group_var))
+  
+  if (method == "original") {
+    data.lm <- lm(formula, data = data)
+  } else if (method == "log") {
+    data.lm <- lm(as.formula(paste("log(", response_var, ") ~", group_var)), data = data)
+  } else if (method == "sqrt") {
+    data.lm <- lm(as.formula(paste("sqrt(", response_var, ") ~", group_var)), data = data)
+  }
+  
+  # Compute estimated marginal means (emmeans) with back-transformation
+  data.lm.emmeans <- emmeans(data.lm, specs = group_var, type = "response")  
+  print(data.lm.emmeans)  # Display emmeans results
+  
+  # Perform pairwise comparisons with back-transformation
+  pairwise_results <- pairs(data.lm.emmeans)
+  print(pairwise_results)  
+  
+  confint(pairwise_results)
+}
+```
+
+The function requires the same arguments as `run_one_way_anova` function. The function returns a table of pairwise comparisons between groups, helping to identify where differences exist. The key outputs include:
+
+-   Estimated Marginal Means (*emmeans*): These represent the adjusted means for each group, accounting for the chosen transformation (if there was a transformation).
+
+-   Pairwise Comparisons: A table showing the difference between each pair of groups.
+
+    -   Confidence Intervals: If the confidence interval for a comparison does not include zero, this suggests a meaningful difference between those groups.
+
+    -   p-values: These indicate the likelihood that the observed differences occurred by chance.
+
+### Permutation Test
+
+A permutation test (also known as a randomization test) is a computer-intensive method used for hypothesis testing when data doesn’t follow a normal distribution. I use this test as an alternative to the *Two-Sample t-test* or the *Mann–Whitney U-test* to compare autistic and non-autistic individuals in mixed pairs across engagement and backchanneling variables.
+
+#### Checking Assumptions
+
+One of the main advantages of permutation tests is that they rely on very few assumptions:
+
+1.  **Random Sampling** - The data must be a random sample from the population.
+
+2.  **Similar Shapes of Distributions** - The variable being compared must have the same distributional shape across groups (this only matters when comparing means or medians).
+
+The first assumption is purely based on study design and can’t be fixed *post hoc*. The second assumption is trickier — permutation tests are fairly robust to violations of this, but only when the sample size is large, which isn’t the case in this project. To check whether the second assumption holds, I visualise the data using histograms. I also simulate data from a normal distribution with the same mean and standard deviation for comparison. To do that, I wrote the following function:
+
+```{r}
+check_distribution_in_mixed_pairs <- function(data, response_var) {
+  
+  # Filter to mixed neurotype pairs only
+  data_filtered <- data |> 
+    filter(research_group == "Mixed")
+  
+  # Plot actual distributions for two groups
+  actual_plot <- ggplot(data_filtered, aes(x = {{ response_var }})) + 
+    
+    geom_histogram(bins = 10, fill = "steelblue", colour = "black", alpha = 0.7) +
+    
+    facet_wrap(~asc_status, nrow = 2) +
+    
+    theme_light() +
+    
+    labs(
+      title = "Frequency Distribution by ASC status in Mixed Pairs",
+      x = as.character(substitute(response_var)),
+      y = "Count"
+    )
+  
+  # Get the necessary stats to plot a simulation
+  data_summary <- data_filtered |>
+    
+    # Apply functions below to each group (autistic and non-autistic) separately:
+    group_by(asc_status) |>
+    
+    summarise(
+      
+      # Calculate mean value for each group:
+      mean = mean({{ response_var }}, na.rm = TRUE),
+      
+      # Calculate variance value (i.e., SD) for each group:
+      sd = sd({{ response_var }}, na.rm = TRUE),
+      
+      # Calculate sample size (i.e., n) for each group:
+      n = n(),
+      .groups = "drop"
+    )
+  
+  # Simulate data from a normal distribution using group stats
+  
+  # set.seed function sets the starting point in the sequence of pseudorandom numbers:
+  set.seed(123) # this makes distribution consistent and reproducible 
+  
+  normal_sim <- data_summary |>
+    
+    # treat each row independently:
+    rowwise() |>
+    
+    # Generate n data points for each group accounting for the group's mean and SD:
+    mutate(
+      simulated = list(rnorm(n, mean, sd))
+    ) |>
+    
+    # Expand the list column 
+    unnest_longer(simulated)
+
+  # Plot simulated data
+  sim_plot <- ggplot(normal_sim, aes(x = simulated)) + 
+    geom_histogram(bins = 10, fill = "darkgreen", colour = "black", alpha = 0.7) +
+    facet_wrap(~asc_status, nrow = 2) +
+    theme_light() +
+    labs(
+      title = "Simulated Normal Distribution by ASC status",
+      x = as.character(substitute(response_var)),
+      y = "Count"
+    )
+
+  # Return both plots
+  plot(actual_plot)
+  plot(sim_plot)
+}
+```
+
+To use this function, you need to provide:
+
+1.  The dataset (`data`), and
+
+2.  The response variable (`response_var`).
+
+The function returns four histograms: two for the autistic group and two for the non-autistic group. One set shows the actual distributions from your dataset, while the other shows simulated distributions generated from a normal distribution, using each group’s sample size, mean, and standard deviation.
+
+The simulated histograms help me visualise the kind of variability one might expect if the underlying population distributions were matched in shape. By comparing the actual histograms with the simulated ones, I can judge whether the groups appear to come from similarly shaped distributions — and therefore whether the second assumption of the permutation test is likely to hold.
+
+#### Conducting the Test
+
+Once I’ve checked that the shape of the distributions is reasonably similar between groups, I can go ahead and run the permutation test. I will use the function `oneway_test()`from the `coin` package, which applies the **Fisher-Pitman permutation test** to the data.
+
+It requires only 2 arguments:
+
+1.  The response and grouping variable, specified using the formula syntax (`response_var ~ group_var`), and
+
+2.  The dataset (`data =`).
+
+The output yields a **test statistic** and the corresponding **p-value**, indicating if there is any evidence for the difference between the groups.
+
+### Simple Linear Regression
+
+Simple linear regression is a method used to predict values of one numerical variable from the values of another numerical variable. In this project, I use it to test whether a participant’s engagement and/or their backchanneling frequency can predict the rapport score given by their interaction partner. I first test this overall and then in each group individually.
+
+**Why not ANCOVA?**
+
+*ANCOVA (analysis of covariance)* is a method that combines elements of ANOVA and regression. It’s used to predict values of one numerical variable from both a numerical and a categorical variable. In this case, the categorical variable would be the research group (autistic, non-autistic, and mixed).
+
+While ANCOVA could be used here in theory, I decided not to use it during my dissertation for two reasons. First, I don’t believe I have enough power to run this test reliably given the small group sizes. Second, as you’ll see later, not all groups meet the assumptions required for linear regression, which means ANCOVA wouldn't be suitable either. So here, I stick with simple linear regression.
+
+Importantly, I’m aware that running simple linear regression multiple times increases the risk of *Type I error*. However, this was a dissertation project with limited sample sizes to begin with, so all findings should be taken with great caution anyway.
+
+#### Checking Assumptions
+
+Before fitting a regression model, the data should meet 4 key assumptions:
+
+1.  **Independence and Random Sampling** – Each observation should be independent, and the data should be randomly sampled from the population.
+
+2.  **Linearity** – The relationship between the explanatory variable (i.e., backchanneling frequency or engagement proportion) and the response variable (rapport score) should be roughly linear.
+
+3.  **Homoscedasticity** – The residuals should have a similar spread across the entire range of the explanatory variable.
+
+4.  **Normality** – Residuals should be approximately normally distributed around the regression line.
+
+The first assumption is built into the study design, so we can’t check it *post hoc*. The remaining three can be checked visually.
+
+To check linearity, I plotted a scatterplot with a fitted line. I wrote the function below to do this:
+
+```{r}
+plot_scatter_with_fitted_line <- function(data, predict_var, response_var, 
+                                 log_transformation = FALSE, sqrt_transformation = FALSE) {
+  
+  # Original scale
+  p_original <- ggplot(data, aes(x = {{ predict_var }}, y = {{ response_var }})) +
+    geom_point(alpha = 0.7) +
+    geom_smooth(method = "loess", formula = y ~ x, se = FALSE) +
+    theme_minimal() +
+    ylim(0, NA) +
+    labs(
+      title = "Scatterplot with Smoothing",
+      x = as_label(enquo(predict_var)),
+      y = as_label(enquo(response_var))
+    )
+
+  print(p_original)
+
+  # Log-transformed
+  if (log_transformation) {
+    p_log <- ggplot(data, aes(x = {{ predict_var }}, y = log({{ response_var }}))) +
+      geom_point(alpha = 0.7) +
+      geom_smooth(method = "loess", formula = y ~ x, se = FALSE) +
+      theme_minimal() +
+      labs(
+        title = "Log-transformed Scatterplot with Smoothing",
+        x = as_label(enquo(predict_var)),
+        y = paste0("log(", as_label(enquo(response_var)), ")")
+      )
+    print(p_log)
+  }
+  
+  # Sqrt-transformed
+  if (sqrt_transformation) {
+    p_sqrt <- ggplot(data, aes(x = {{ predict_var }}, y = sqrt({{ response_var }}))) +
+      geom_point(alpha = 0.7) +
+      geom_smooth(method = "loess", formula = y ~ x, se = FALSE) +
+      theme_minimal() +
+      ylim(0, NA) +
+      labs(
+        title = "Square Root-transformed Scatterplot with Smoothing",
+        x = as_label(enquo(predict_var)),
+        y = paste0("sqrt(", as_label(enquo(response_var)), ")")
+      )
+    print(p_sqrt)
+  }
+}
+```
+
+The function requires 4 arguments:
+
+1.  the dataset (`data`),
+
+2.  the predictor variable (`predict_var`) which is the variable being used to predict the behaviour of the response variable,
+
+3.  the response variable (`response_var`), and
+
+4.  whether you want to apply log and/or square root transformations (`log_transformation = TRUE` or/and `sqrt_transformation = TRUE`).
+
+The function returns scatterplot with the fitted line, which can help check whether the relationship is linear. If it’s not, then applying a transformation (either *logarithmic* or *square root*) might help.
+
+To check homoscedasticity and normality, I reused the same diagnostic plots I used for one-way ANOVA, through the `run_diagnostic_plots` function. Homoscedasticity assumption is equivalent to the homogeneity of variance, and is checked with the same plot. For the explanation of how this function works and how to interpret its output, see the section *One-way ANOVA: Checking Assumptions*.
+
+By running these functions, I could check if my data met the necessary assumptions for the regression analysis. If the assumptions weren’t met, I applied transformations or kept the violations in mind when conducting the analysis and interpreting the results.
+
+#### Conducting the Test
+
+Once I confirmed that the assumptions were met (or considered the violations), I used the following function to run the simple linear regression:
+
+```{r}
+run_simple_linear_regression <- function(data, predict_var, response_var, method = "original") {
+  
+  # Check if method is valid
+  if (!method %in% c("original", "log", "sqrt")) {
+    stop("Invalid method. Choose one of: 'original', 'log', or 'sqrt'.")
+  }
+  
+  # Fit the model based on the chosen method
+  if (method == "original") {
+    model <- lm(data[[response_var]] ~ data[[predict_var]], data = data)
+    summary(model)
+    
+  } else if (method == "log") {
+    model <- lm(log(data[[response_var]]) ~ data[[predict_var]], data = data)
+    summary(model)
+    
+  } else if (method == "sqrt") {
+    model <- lm(sqrt(data[[response_var]]) ~ data[[predict_var]], data = data)
+    summary(model)
+  }
+}
+```
+
+This function performs a simple linear regression analysis and requires 4 inputs:
+
+1.  The dataset ("`data`"),
+
+2.  The the predictor variable variable ("`predict_var`"),
+
+3.  The outcome variable ("`response_var`"), and
+
+4.  The transformation method ("`method`"), which can be: "`original`", "`log`", or "`sqrt`" . Depending on the chosen method:
+
+    -   If "`original`" is chosen, the function fits a linear regression model using the raw (untransformed) outcome variable.
+
+    -   If "`log`" is chosen, it applies a log transformation to the outcome variable before fitting the model.
+
+    -   If "`sqrt`" is chosen, it applies a square root transformation to the outcome variable before fitting the model.
+
+The function returns the **summary output of the fitted regression model**. This includes estimates of the model coefficients — **intercept** and **slope**, the **R-squared**, and the **p-value**. These values help evaluate how well the explanatory variable explains the variation in the response variable. Specifically, the p-value shows how likely it is that the relationship we see could have happened by chance, while R-squared tells us how much of the variation in the outcome can be explained by the predictor.
+
+### Fisher's Exact Test
+
+Fisher’s exact test is a contingency test used to examine whether two categorical variables are independent. In this case, I’ll analyse whether the relative frequency of role switches differs across the three research groups – autistic, non-autistic, and mixed. Since we’re dealing with three groups, I’ll use the **Freeman-Halton extension** to apply Fisher’s Exact Test to a 2×3 contingency table.
+
+**Why not contingency χ2 test?**
+
+The *χ2 test (Chi-square test of independence)* is the most commonly used method for checking associations between categorical variables. However, it has 5 key assumptions:
+
+1.  Both variables are categorical.
+
+2.  All observations are independent and randomly sampled.
+
+3.  Cells in contingency table are mutually exclusive.
+
+4.  No more than 20% of the cells should have an expected frequency less than five.
+
+5.  No cell should have an expected frequency less than one.
+
+While the first three assumptions are met — with mutually exclusive research groups and role switch occurrence (recorded as `FALSE` if no switch occurred in each pair within each group, or `TRUE` if it did) — the last two assumptions need to be tested. To do this, I first build a contingency table:
+
+```{r}
+contingency_table <- table(communication_rapport$swap_y_n,
+                           communication_rapport$research_group)
+```
+
+I then check the expected values for each cell:
+
+```{r}
+chisq_test <- chisq.test(contingency_table)
+
+chisq_test$expected
+```
+
+We can see that, while no cells have an expected frequency below 1, half of the cells have values below 5. This violates the assumption for the χ² test, so instead, I use Fisher’s Exact Test, which does not require this assumption:
+
+```{r}
+rm(chisq_test, contingency_table)
+```
+
+#### Conducting the Test
+
+To conduct Fisher’s Exact Test, I use the `fisher.test()` function, which takes a contingency table as input and returns an exact p-value. If there’s sufficient evidence of a difference between the groups, I follow up with `pairwise_fisher_test()` to perform pairwise comparisons. To adjust for multiple comparisons, I apply the *Benjamini-Hochberg method* by setting `p.adjust.method = "fdr"`.
+
+While this post-hoc analysis does not produce 95% confidence intervals (CIs), it provides p-values indicating how likely the observed differences between each pair of groups are to occur if the null hypothesis were true and no actual differences existed.
+
+### p-values Interpretation
+
+When interpreting p-values, I followed the guidelines from Ganesh and Cave (2018), who emphasise that p-values should be treated as continuous measures rather than strict thresholds for decision-making. Instead of relying solely on arbitrary cutoffs, I examined p-values in terms of the strength of evidence they provide, considering them alongside effect sizes and 95% CIs. This approach helps to avoid misinterpretation and provides a more comprehensive understanding of the data.
+
+That said, it’s important to acknowledge the ongoing debate around the most meaningful and responsible ways to statistically analyse and present data — and I’m still learning.
+
+Now that I’ve covered all the tests I’ll be using for this project, along with their assumptions and appropriate functions, I can move on to analysing my cleaned data and exploring the research questions I outlined at the start of the project.
+
+## Applying Methods to Research Questions
+
+### Does Interaction Length Vary by Group?
+
+I start by testing if there is a difference in interaction length between three research groups using one-way ANOVA. Before running the test, I check for outliers and access whether the data meet the test assumptions. I do this by running three functions: `identify_outliers()`, `plot_boxplots()`, and `run_diagnostic_plots()`.
+
+```{r}
+# First Function - identifying outliers:
+
+identify_outliers(communication_rapport, research_group, interaction_min)
+```
+
+```{r}
+# Second Function - plotting data:
+
+plot_boxplots(communication_rapport, research_group, interaction_min)
+```
+
+Every group has two outliers. All of them are mild, except for one extreme outlier in the non-autistic group. These outliers could confound the results of the test.
+
+The boxplots show that the autistic group has slightly greater variance than the other two groups. However, the data appear roughly normally distributed across all groups (when outliers aren't considered).
+
+Given these patterns, applying a data transformation might be a good idea here. To explore this further, I run diagnostic plots with both non-transformed and transformed data:
+
+```{r}
+# Third Function - diagnostic plots:
+
+run_diagnostic_plots(communication_rapport, "research_group", "interaction_min", 
+                     log_transformation = TRUE, sqrt_transformation = TRUE)
+```
+
+Both normality and equal variance assumptions look much better when the data is log-transformed. Thus, I decide to proceed with the original data, but to be cautious also run one-way anova with the log-transformed data to confirm my findings:
+
+```{r}
+run_one_way_anova(communication_rapport, "research_group", "interaction_min", "original")
+```
+
+The one-way ANOVA on the original data yields a high **p-value of 0.28** indicating that there is not enough evidence to suggest that interaction length was different between the research groups.
+
+```{r}
+run_one_way_anova(communication_rapport, "research_group", "interaction_min", "log")
+```
+
+The log-transformed data produce a slightly lower **p-value of 0.19**. Nonetheless, the p-value is still too large to claim that there is any real difference between the groups.
+
+In conclusion, **there is not enough evidence to suggest a difference in interaction length between groups**. One possible explanation is that participants’ interactions were task-driven, with interaction length largely determined by task completion rather than group differences. Still, it is interesting that participants took a similar amount of time to complete the task, especially given evidence that information transfer in mixed pairs (autistic–non-autistic) is less efficient compared to matched pairs (Crompton *et al*, 2020). A potentially useful way to explore this may be to look not only at whether the task was completed, but also how accurately it was completed across groups. Unfortunately, this remains an open question, as it falls beyond the scope of my analysis and this research project.
+
+### Do Participants Report Higher Rapport in Same-Neurotype Pairs?
+
+Next, I analyse whether there is a difference in rapport scores between different groups using one-way ANOVA. Again, let's first use our three functions to see if data meet all requirements for the test:
+
+```{r}
+identify_outliers(communication_rapport, research_group, rapport_score)
+```
+
+```{r}
+plot_boxplots(communication_rapport, research_group, rapport_score)
+```
+
+Autistic and non-autistic groups have a few outliers with the autistic group having one extreme outlier. After investigating boxplots, I have a concern that the outlier in autistic group can skew results significantly and negate a real difference that seems to exist between three groups.
+
+```{r}
+run_diagnostic_plots(communication_rapport, "research_group", "rapport_score", 
+                     log_transformation = TRUE, sqrt_transformation = TRUE)
+```
+
+Diagnostic plots show that none of the transformation methods helped remove the outliers. The good news is that the original data appears consistent enough with the assumptions of equal variance and normality. I thus have decided to proceed with the original data, but also double-check the findings by running a one-way ANOVA with the same data but excluding the extreme outlier in the autistic group.
+
+```{r}
+run_one_way_anova(communication_rapport, "research_group", "rapport_score", "original")
+```
+
+The **p-value from** the original data **is quite low — 0.009** — suggesting strong evidence for a difference between groups. To investigate this further, I ran a Tukey HSD post-hoc test:
+
+```{r}
+run_tukey_hsd(communication_rapport, "research_group", "rapport_score", "original")
+```
+
+The post-hoc test shows no evidence of a difference between autistic and non-autistic groups (p = 0.9175). However, there is strong evidence for a difference between non-autistic and mixed groups (p = 0.0110), with rapport scores differing by 49.31 (± 16.4; 95% CI: 9.76 to 88.86). It also indicates moderate evidence for a difference between autistic and mixed groups (p = 0.0459), with a difference estimate of 42.44 (± 17.4; CI: 0.63 to 84.25).
+
+This is a bit surprising when looking at the boxplots, which show a clearer difference between autistic and mixed groups, and a less pronounced difference between non-autistic and mixed groups. As mentioned earlier, one-way ANOVA is quite sensitive to outliers, so it’s likely that the extreme outlier in the autistic group has confounded the results. For this reason, I’m going to remove the extreme outlier and see how it affects the findings. I’ll temporarily create a new dataset without the outlier - `temp_rapport_n_outlier` - using the `filter()` function:
+
+```{r}
+temp_rapport_n_outlier <- communication_rapport |> 
+  
+  # Removing the extreme outlier:
+  filter(!(research_group == "Autistic" & rapport_score == 249.5))
+```
+
+As before, I’ll first run a one-way ANOVA and then, if the p-value is still low, a Tukey HSD post-hoc test:
+
+```{r}
+run_one_way_anova(temp_rapport_n_outlier, "research_group", "rapport_score", "original")
+```
+
+The new **p-value is even smaller — now at 0.001**.
+
+```{r}
+run_tukey_hsd(temp_rapport_n_outlier, "research_group", "rapport_score", "original")
+```
+
+This time, the Tukey HSD test shows strong evidence (p \< 0.01) of a difference between autistic and mixed pairs, with a difference of 53.42 (± 15.9; 95% CI: 15.2 to 91.7). The comparisons between non-autistic and autistic pairs, and between non-autistic and mixed pairs, remained approximately the same.
+
+In conclusion, **there is strong evidence that rapport scores are higher in matched pairs compared to mixed pairs**. This aligns with previous research showing that autistic and non-autistic individuals tend to experience higher rapport when interacting with someone of the same neurotype. What might explain this difference? Could it be that engagement is higher in matched pairs, or that backchanneling is more frequent? Let’s remove the no longer necessary `temp_rapport_n_outlier` and explore these questions.
+
+```{r}
+rm(temp_rapport_n_outlier)
+```
+
+### Does Verbal Engagement Differ Across Groups?
+
+I first look at the engagement aspect of the communication and check if it varies across groups using one-way ANOVA. As always, I begin by running the `identify_outliers()` and `plot_boxplots()` functions, followed by `run_diagnostic_plots()` to check whether the data meets the assumptions of the test.
+
+```{r}
+identify_outliers(communication_rapport, research_group, engagement_prop)
+```
+
+```{r}
+plot_boxplots(communication_rapport, research_group, engagement_prop)
+```
+
+There are no outliers in any of the groups, and it seems that the variance between the groups is largely similar, with values that appear roughly normally distributed. At this point, I have a slight concern about the autistic group, since the variance in this group looks slightly different from the other two. Let's investigate further using the `run_diagnostic_plots()` function:
+
+```{r}
+run_diagnostic_plots(communication_rapport, "research_group", "engagement_prop")
+```
+
+Turns out my concerns were unnecessary — the assumptions of equal variance and normality look good, so I can go ahead and run a one-way ANOVA without any transformations.
+
+```{r}
+run_one_way_anova(communication_rapport, "research_group", "engagement_prop", "original")
+```
+
+The **p-value is low — 0.005** — indicating strong evidence for a difference in engagement across groups.
+
+```{r}
+run_tukey_hsd(communication_rapport, "research_group", "engagement_prop", "original")
+```
+
+Post-hoc analysis shows strong evidence (p-value = 0.003) that participants verbally interacted with their conversation partners a higher proportion of time in non-autistic pairs compared to mixed pairs, with a difference of 0.258 (± SE: 0.075; 95% CIs: 0.078 to 0.438). There was insufficient evidence for a difference between autistic and non-autistic pairs (p-value = 0.2337), or between autistic and mixed pairs (p-value = 0.2541).
+
+In conclusion, **there is strong evidence that participants engaged a higher proportion of time with their interaction partners in non-autistic pairs compared to mixed pairs**. Interestingly, I did not find sufficient evidence for a difference between autistic and mixed pairs. At the same time, I also did not find sufficient evidence that engagement was higher in non-autistic pairs compared to autistic pairs.
+
+Why is that? One explanation could be that autistic individuals engage less with others regardless of their partner’s ASC status. If that’s the case, we would expect to see that autistic individuals’ engagement is lower compared to non-autistic individuals within mixed pairs. Let's check if that’s the case by running the Fisher-Pitman permutation test. Before running the permutation test, I am going to check if the engagement's distribution across groups is similar:
+
+```{r}
+check_distribution_in_mixed_pairs(communication_rapport, engagement_prop)
+```
+
+The distributions look roughly similar. Although, the sample size for each group is very small, which means the findings should be taken with a pinch of salt. Nonetheless, let’s run the test:
+
+```{r}
+oneway_test(engagement_prop ~ asc_status, 
+            data = communication_rapport |> filter(research_group == "Mixed"))
+```
+
+The test yielded the **p-value of 0.75**, indicating there isn’t sufficient evidence for a difference between the two groups.
+
+These results suggest that **both autistic and non-autistic individuals engage less with one another during mixed interactions**.
+
+Let's now investigate how engagement impacts the rapport-building both overall and within each group.
+
+### Does Higher Verbal Engagement Predict Higher Rapport?
+
+To test whether participant’s verbal engagement affects their partner’s rapport, I use simple linear regression. Before running the analysis, I check that the data met all necessary assumptions using the `plot_scatter_with_fitted_line()` and `run_diagnostic_plots()` functions:
+
+```{r}
+plot_scatter_with_fitted_line(communication_rapport, engagement_prop, rapport_score)
+```
+
+The scatterplot shows a roughly linear relationship between participant's engagement and their interaction partner's rapport.
+
+```{r}
+run_diagnostic_plots(communication_rapport, "engagement_prop", "rapport_score")
+```
+
+The diagnostic plots show that data meets the assumptions of homoscedasticity and normality. However, both the scatterplot and the diagnostic plots show a few outliers, which could skew the regression results. So, I first ran the analysis on the full dataset, and then again with the outliers removed.
+
+```{r}
+run_simple_linear_regression(communication_rapport, "engagement_prop", "rapport_score")
+```
+
+Simple linear regression provides moderate evidence (**p = 0.0283**) that the rapport of participant's partner increases with the participant’s verbal interaction. However, the R-squared value is only 0.065, with a slope of 62 (± 27.54 SE) and intercept of 383.70 (± 14.67 SE).
+
+To confirm the results, I re-ran the test after removing the two most prominent outliers (those with rapport scores below 300). Since removing just two points doesn’t strongly affect assumptions, I proceed with the same model:
+
+```{r}
+run_simple_linear_regression(communication_rapport |> filter(rapport_score > 300), 
+                             "engagement_prop", "rapport_score")
+```
+
+This time, the regression returns slightly stronger evidence (**p = 0.013**), suggesting that the initial result wasn't driven by outliers.
+
+In conclusion, **there is moderate-to-strong evidence that the proportion of time participants verbally engage with their interaction partners affects the rapport scores given by them**. However, the effect size is quite small – on average, a 10% increase in verbal interaction is associated with only a 6.2 unit increase in rapport, indicating that increase in the engagement can explain only a small fraction of the rapport-building.
+
+Next, I look into whether this pattern holds across the different neurotype groups. Before running the analysis, I check whether the assumptions of linear regression are met for each group individually, starting with the autistic group:
+
+```{r}
+# Autistic Group: 
+plot_scatter_with_fitted_line(communication_rapport |> 
+                                filter(research_group == "Matched Autistic"),
+                              engagement_prop, rapport_score,
+                              log_transformation = TRUE,
+                              sqrt_transformation = TRUE)
+```
+
+For the autistic group, the assumption of linearity appears to be met (more or less) when rapport scores are square root transformed.
+
+```{r}
+run_diagnostic_plots(communication_rapport |> 
+                       filter(research_group == "Matched Autistic"), 
+                     "engagement_prop", "rapport_score",
+                     sqrt_transformation = TRUE)
+```
+
+The assumptions of normality and homoscedasticity look good. However, there is a strong outlier that may skew the results, so I decide to analyse the data both with and without this outlier.
+
+Next, I examine the non-autistic and mixed groups:
+
+```{r}
+# Non-autistic Group:
+plot_scatter_with_fitted_line(communication_rapport |> 
+                                filter(research_group == "Matched Non-autistic"),
+                              engagement_prop, rapport_score,
+                              log_transformation = TRUE,
+                              sqrt_transformation = TRUE)
+```
+
+```{r}
+# Mixed Group:
+plot_scatter_with_fitted_line(communication_rapport |> 
+                                filter(research_group == "Mixed"),
+                              engagement_prop, rapport_score,
+                              log_transformation = TRUE,
+                              sqrt_transformation = TRUE)
+```
+
+For the non-autistic group, the assumption of linearity is not met, and neither transformation is helpful. For the mixed group, the relationship became linear with a square root transformation.
+
+```{r}
+run_diagnostic_plots(communication_rapport |> 
+                       filter(research_group == "Mixed"), 
+                     "engagement_prop", "rapport_score",
+                     sqrt_transformation = TRUE)
+```
+
+However, the assumption of homoscedasticity is violated in the mixed group. Despite this, I proceed with the analysis, keeping this violation in mind.
+
+I run simple linear regression first with the autistic and then with the mixed group.
+
+```{r}
+# Autistic Group (with the outlier)
+run_simple_linear_regression(communication_rapport |> 
+                       filter(research_group == "Matched Autistic"), 
+                       "engagement_prop", "rapport_score")
+
+# Autistic Group (without the outlier)
+run_simple_linear_regression(communication_rapport |> 
+                       filter(research_group == "Matched Autistic" &
+                              rapport_score > 300), 
+                       "engagement_prop", "rapport_score")
+```
+
+```{r}
+# Mixed Group:
+run_simple_linear_regression(communication_rapport |> 
+                       filter(research_group == "Mixed"), 
+                       "engagement_prop", "rapport_score")
+```
+
+For the mixed group, there was not enough evidence (p = 0.82) of a relationship between engagement and rapport. For the autistic group, there was weak evidence when the outlier was included (p = 0.05), but this dropped to insufficient evidence once the outlier was removed (p = 0.1513).
+
+In conclusion, **there is insufficient evidence to suggest that higher verbal engagement is associated with higher rapport scores in either group** - a pattern that was found when when the data from all the groups was combined. Importantly, these findings should be interpreted with caution due to the small sample sizes within each group.
+
+### Does Role Switching Happen Equally Often Across Groups?
+
+Additionally, I decided it would be interesting to explore whether the frequency of interaction role switching differ between the groups, using Fisher’s Exact Test.
+
+To run the test, I first build a 2x3 contingency table. Each cell represents the crossover between the research group (autistic, non-autistic, or mixed) and whether a role switch occurs (TRUE) or does not occur (FALSE) (with the number indicating total number of pairs for each crossover).
+
+```{r}
+contingency_table <- table(communication_rapport$swap_y_n, 
+                           communication_rapport$research_group)
+
+contingency_table
+```
+
+I then apply Fisher’s Exact Test with the Freeman-Halton extension to this table:
+
+```{r}
+fisher.test(contingency_table)
+```
+
+The test shows moderate evidence (**p-value = 0.025**) for a difference between the groups. To explore this further, I run post-hoc pairwise comparisons:
+
+```{r}
+pairwise_fisher_test(contingency_table, p.adjust.method = "fdr")
+```
+
+The comparison reveals moderate evidence (**p-value = 0.0324**) for a difference between the autistic and non-autistic groups, with role switching occurring more frequently in the non-autistic group than in the autistic group (19% vs 0%).
+
+In conclusion, **there is some evidence that non-autistic adults are more likely to switch interaction roles when paired with other non-autistic adults compared to autistic pairs**. This aligns with expectations, as a preference for repetitive and restricted behaviour is a common autistic trait.
+
+Interestingly, in mixed pairs, both autistic and non-autistic participants show instances of role switching, suggesting that the presence of a non-autistic partner may influence the interaction dynamics for autistic individuals:
+
+```{r}
+communication_rapport |> filter(research_group == "Mixed" & swap_y_n == TRUE)
+```
+
+### Does Backchanneling Differ Across Groups?
+
+The analysis of the backchanneling data follows the same approach as the engagement data. To avoid repeating myself, I’ve chosen not to annotate the code here. If you’d like to review it, the full code is available in the *Code Appendix* below, though it won’t include a written explanation of my reasoning. For that, you can refer to my Honours Project (Section *Results: Rate of Verbal Backchannel Response*).
+
+# Sharing Data
+
+After analysing my data, it’s time to share the findings. The **share phase** can involve making **reports**, **presentations**, or **data visualisations**. In my case, my audience was other students and researchers, so I communicated my findings by writing up my dissertation and delivering a presentation — both of which are available in this project’s repository. I also created a project report aimed at a broader audience.
+
+I used a combination of **ggplot2** and **Tableau** to create data visualisations. While ggplot2 gave me precise control over the appearance of my plots for the dissertation and presentation, Tableau was helpful for creating more interactive, casual visuals for the project report.
+
+To guide the process of designing these visualisations, I drew on a few frameworks — which I’ve summarised in the section *Creating Your Perfect Visualisation* (a bit ambitious but I try my best).
+
+I’ve also included examples of the code I used to create boxplots, scatterplots, and histograms in R using ggplot2 — you can find these in the section *ggplot2: R Tool for Data Visualisation*.
+
+## Creating Your Perfect Visualisation
+
+A good data visualisation should be **clear**, **purposeful**, and **intuitive**. Ideally, your audience should grasp what they're looking at within 5 seconds and understand your key takeaway within the next 5.
+
+Based on David McCandless’ method, there are four essential elements that make up any effective data visualisation:
+
+-   **Information (Data)**: selecting the right data to include.
+
+-   **Goal**: having a clear purpose for the visual.
+
+-   **Story**: crafting a narrative from the data.
+
+-   **Visual Form**: choosing an appropriate, intuitive way to display the data.
+
+Each element is crucial for effective data visualisation, and all of them need to overlap for a visualisation to work well (see Figure 6).
+
+![](effective%20data%20vis.png){width="586"}
+
+::: {style="background-color: #e0e0e0; padding: 5px; border-radius: 5px;"}
+Figure 6. The four components of effective data visualisation (David McCandless, Information is Beautiful). The figure shows how each component is essential for effective data visualisation, and emphasises the importance of all four elements being present for a successful visual.
+:::
+
+Let’s break them down one by one.
+
+### Selecting the Right Data
+
+The starting point for any visualisation is deciding what data matters most. It’s not about cramming every piece of information you have into a chart — it’s about being selective and thoughtful with what you show.
+
+To do this well, I consider the following:
+
+1.  **Who’s my audience?** Are they experts, casual viewers, or decision-makers?
+
+2.  **What do they care about?** What do you want them to feel or do after seeing your visual?
+
+3.  **What’s the context?** Are you presenting this live, adding it to a report, or posting it online?
+
+For example, when I presented my findings to fellow students, I deliberately left out individual data points because it risked overwhelming people and distracting from the patterns that actually mattered. But in my dissertation write-up, those details were important for transparency and scrutiny.
+
+The bottom line: **the data you show should match both your message and your audience’s expectations**. What you leave out is just as important as what you include.
+
+### Achieving Your Goal
+
+Every visualisation should exist for a reason — it’s not just decoration. Before building anything, ask yourself: **What do I want people to take away from this?**
+
+The goal of the visual could be to:
+
+-   Highlight a trend
+
+-   Show a relationship between variables
+
+-   Expose an outlier
+
+-   Explain how something changed over time
+
+-   Show differences between groups
+
+-   Encourage action or decision-making
+
+Once I'm clear on my goal, it’ll guide choices like whether my visual should be *static* (fixed and direct) or *dynamic* (interactive and exploratory).
+
+Dynamic visuals can be engaging and let users dive into what interests them, but they can also give people too much control and lead them down tangents that pull focus from the core message.
+
+Both static and dynamic visuals can become overcrowded. If your visualisation is trying to serve multiple purposes, it’s usually better to split it into two simple, focused visuals rather than one overly complicated one attempting to do too much.
+
+### Telling an Interesting Story
+
+A good visualisation isn’t just a picture — it’s a story. It should take people on a journey, whether that’s revealing a surprising insight, confirming a suspicion, or highlighting a problem that needs fixing.
+
+Different types of stories suit different visual formats (see Table 5).
+
+[Table 5. Different kinds of visualisations and the stories they tell.]{.underline}
+
++---------------+------------------------------------+----------------------+
+| Type of Story | What It Shows                      | Best Visualisation   |
++===============+====================================+======================+
+| Change        | Trends over time                   | Line or column chart |
++---------------+------------------------------------+----------------------+
+| Clustering    | Groups of similar/different values | Distribution graph   |
++---------------+------------------------------------+----------------------+
+| Relativity    | How values relate proportionally   | Pie chart            |
++---------------+------------------------------------+----------------------+
+| Ranking       | Position or order on a scale       | Column chart         |
++---------------+------------------------------------+----------------------+
+| Correlation   | Relationships between variables    | Scatterplot          |
++---------------+------------------------------------+----------------------+
+
+There are many other kinds of visualisations - a lot of them can be found [data-to-viz.com](https://www.data-to-viz.com), which also offers a highly useful decision tree for picking the right visualisation.
+
+### Choosing Right Visual Form
+
+Finally comes the actual design. A visualisation is made up of **marks** (points, lines, shapes) and **channels** (position, size, shape, colour, etc.) — and how you arrange them makes all the difference.
+
+Here are some key design principles that I consider when building any visualisation:
+
+1.  **Balance:** Distribute visual elements evenly. It doesn’t have to be symmetrical, but avoid having one side too heavy.
+
+2.  **Emphasis:** Make sure your key point stands out. Use colour, size, or position to highlight what matters most.
+
+3.  **Movement:** Guide your audience’s eyes naturally across the visual — mimic how people read.
+
+4.  **Pattern:** Use shapes, colours, or lines to create patterns that help explain similarities or trends.
+
+5.  **Repetition:** Repeat chart types or colours to add consistency and clarity.
+
+6.  **Proportion:** Use size and colour to show importance or relationships.
+
+7.  **Rhythm:** Create a sense of flow in how the information is arranged.
+
+8.  **Variety:** Mix chart types and elements where it makes sense to keep visuals engaging.
+
+9.  **Unity:** Make sure everything feels part of the same story — avoid disjointed or cluttered visuals.
+
+I also always consider using headlines, subtitles, labels and annotations to increase the clarity and accessibility of my visual.
+
+Other accessible design choices can include choosing colour-blind-friendly palettes, providing alt text for images, breaking down complex visuals into simpler parts, and avoiding clutter.
+
+### Putting it all together
+
+The process of creating great data visualisation follows a design-thinking approach. The five key phases are:
+
+1.  **Empathise:** Understand your audience — what they care about, how they feel, and what they need.
+
+2.  **Define:** Pin down what information they actually need and what decisions it should help them make.
+
+3.  **Ideate:** Come up with ideas for how to visualise the data, experiment with different approaches, and sketch out concepts.
+
+4.  **Prototype:** Create a draft version (or a few) of your visualisations. Share them early and often.
+
+5.  **Test:** Show your prototypes to others — ideally people similar to your target audience — and gather honest feedback before presenting to stakeholders.
+
+In the next section, I’ll show some examples of the code I used to create visualisations for my project write-up, and explain the design choices I made along the way.
+
+## ggplot2: R Tool for Data Visualisation
+
+In my dissertation write-up, I mainly used boxplots, histograms, and scatterplots to visualise my findings. Below is an example of how I visualised my findings on engagement using all of these graphics. I'll start with the boxplots. 
+
+### Boxplots: Visualising Between-Group Differences in Engagement
+
+Boxplots are ideal for visualising a numerical variable (in this case, the proportion of time participants were engaged) across several categorical groups (i.e., research groups: autistic pairs, non-autistic pairs, and mixed pairs). They help communicate both the distribution and variability of the data, especially when overlaid with individual data points.
+
+When I looked at my data, I found strong evidence that participants in non-autistic pairs engage more with each other than those in mixed pairs. But the same didn’t hold clearly for autistic pairs — I didn’t find enough evidence to say they engage more or less than those in mixed pairs. And there wasn’t any evidence of a difference between autistic and non-autistic pairs either.
+
+Put simply:
+
+1.  Non-autistic individuals appear to engage more when paired with someone of the same neurotype.
+
+2.  There's no strong evidence either way for autistic individuals.
+
+Given that my audience consists of students and researchers with a reasonable level of expertise, my goal is to provide a clear visual summary of engagement patterns and their statistical significance. For this purpose, boxplots overlaid with individual data points are particularly effective.
+
+Let's create our fist draft:
+
+```{r}
+communication_rapport |> 
+  
+  ggplot(aes(x = research_group, y = engagement_prop)) +
+  
+  geom_boxplot() +
+  
+  geom_jitter()
+```
+
+This gives a basic look — we can see there are three groups, and some differences in engagement. But it’s not very easy to read yet. All the boxplots and points look the same, which makes it harder to follow.
+
+```{r}
+communication_rapport |> 
+  
+  ggplot(aes(x = research_group, y = engagement_prop)) +
+  
+  geom_boxplot(aes(fill = research_group)) +
+  
+  geom_jitter(aes(shape = research_group))
+```
+
+Now each group has its own colour and point shape. But the points are a bit too spread out sideways, making it harder to judge where the data clusters. Also, the fully coloured boxplots obscure the median lines and reduce contrast between box outlines.
+
+To fix this, I made a few tweaks: I reduced the fill opacity to make the box content more transparent, slightly increased the width of the boxplot outlines for better contrast, and narrowed the jitter width so the data points stay closer to their group. I also decided to remove the legend since it is redundant. 
+
+```{r}
+en_plot <- communication_rapport |> 
+  
+  ggplot(aes(x = research_group, y = engagement_prop)) +
+  
+  geom_boxplot(aes(fill = research_group), 
+               size = 0.7, alpha = 0.2, 
+               colour = "grey30", 
+               show.legend = FALSE) +
+  
+  geom_jitter(aes(shape = research_group), 
+              width = 0.1, 
+              show.legend = FALSE, size = 1.7)
+
+en_plot
+```
+
+This makes it easier to compare groups — we can clearly see the spread and clustering of data, and the medians are no longer obscured.
+
+We can make the plot even more informative by including the results of post-hoc tests directly. This helps readers immediately identify whether group differences are statistically meaningful.
+
+Here are the results from my Tukey HSD Post-hoc test:
+
+-   Matched Non-autistic vs Mixed: p = 0.0032
+
+-   Matched Autistic vs Mixed: p = 0.2337
+
+-   Matched Autistic vs Non-autistic: p = 0.2541
+
+I stored these in a small data frame called `tukey_df`:
+
+```{r}
+tukey_df <- data.frame(
+  group1    = c("Matched Autistic", 
+             "Matched Non-autistic", 
+             "Matched Autistic"),
+  
+  group2     = c("Matched Non-autistic", 
+             "Mixed", 
+             "Mixed"),
+  p.adj      = c(0.2541, 0.2337, 0.0032),
+  y.position = c(1.05, 1.1, 1.17),
+  label      = c("p > 0.1", "p < 0.005", "p > 0.1"), 
+  colour     = c("Black", "Red", "Black")
+)
+```
+
+Then I added this to the plot using` stat_pvalue_manual()` and coloured the significant p-value red to draw attention:
+
+```{r}
+en_plot <- en_plot +
+  
+  stat_pvalue_manual(
+    tukey_df,
+    label = "label",
+    y.position = "y.position",
+    tip.length = 0.02,
+    textsize = 4,
+    color = "colour",
+    show.legend = FALSE
+  ) +
+  
+   scale_colour_manual(
+    values = c(
+      "Red"   = "red",
+      "Black" = "black"
+    )
+  )
+
+en_plot
+```
+
+To improve clarity, I added a descriptive title and axis labels. I also customised the fill palette so each group is distinct — with violet for autistic pairs, grey for non-autistic pairs, and blue for mixed pairs. I also removed the legend since the group names are already clear from the axis.
+
+```{r}
+en_plot <- en_plot +
+  
+  scale_fill_manual(values = c(
+    "Matched Autistic"     = "#D41159",
+    "Matched Non-autistic" = "#6B7280",
+    "Mixed"                = "#1A85FF"
+  )) +
+  
+  scale_y_continuous(limits = c(0, 1.2),
+                     breaks  = seq(0, 1, 0.2),
+                     expand = expansion(mult = c(0.1, 0.1))) +
+  
+  labs(
+    title = "Differences in Engagement Across Various Pair Types",
+    x = "Pair Group",
+    y = "Proportion of Time Engaged"
+  ) +
+  
+  theme_minimal() +
+  
+  theme(
+    axis.text.x = element_text(size = 14),   
+    axis.title.x = element_text(size = 14, margin = margin(t = 10)),
+    axis.title.y = element_text(size = 14, margin = margin(r = 10))
+    )
+
+en_plot
+```
+
+Finally, I added the number of participants in each group beneath the x-axis. This makes the sample sizes for each group transparent and easy to spot.
+
+```{r}
+group_sizes <- communication_rapport |> 
+  group_by(research_group) |> 
+  summarise(n = n())
+
+en_plot <- en_plot + 
+  
+  geom_text(
+    data = group_sizes,
+    aes(x = research_group, y = 0, label = paste0("n = ", n)),
+    vjust = 2, size = 4.5
+  ) 
+
+en_plot
+```
+
+And with this final touch, the boxplot graphic is complete.
+
+Next I'm going to review histograms. 
+
+### Histograms: Exploring Engagement Within Mixed Pairs
+
+Histograms are used to visualise the distribution of a single numerical variable. They do this by dividing values into equal-width bins (or columns), where the height of each bin represents how many observations fall within that range.
+
+After finding that participants in mixed pairs tended to engage less than those in matched non-autistic pairs, I wanted to understand whether this difference was mostly driven by reduced engagement from autistic individuals. In other words, I looked at whether autistic participants in mixed pairs were engaging less than their non-autistic partners.
+
+To explore this, I visualised engagement **within mixed pairs only**, comparing autistic and non-autistic participants. The permutation test showed that there was not enough evidence to support a meaningful difference in engagement between the two groups - i.e., there was no evidence that autistic adults engaged less in mixed pairs comparing to non-autistic adults. 
+
+To communicate this clearly, I used histograms.
+
+Let's make our first draft:
+
+```{r}
+communication_rapport |> 
+  filter(research_group == "Mixed") |> 
+  
+  ggplot(aes(x = engagement_prop)) +
+  geom_histogram(aes(fill = asc_status))
+```
+
+While this plot technically shows both groups, the data are stacked on top of each other, making it difficult to interpret. Let's split the two groups into separate panels.
+
+```{r}
+communication_rapport |> 
+  filter(research_group == "Mixed") |> 
+  
+  ggplot(aes(x = engagement_prop)) +
+  geom_histogram(aes(fill = asc_status)) +
+  
+  facet_wrap(~asc_status, nrow = 2, ncol = 1)
+```
+
+This already improves readability. But the bins have gaps between them, and the alignment doesn’t start at zero, which makes interpretation less intuitive.
+
+To fix this, I set the bin width to 0.2 (`binwidth = 0.2`) so each bar represents a consistent 20% range of engagement. I also aligned the bins to start at 0 using `boundary = 0`:
+
+```{r}
+communication_rapport |> 
+  filter(research_group == "Mixed") |> 
+  
+  ggplot(aes(x = engagement_prop)) +
+  geom_histogram(aes(fill = asc_status), binwidth = 0.2, boundary = 0) +
+  
+  facet_wrap(~asc_status, nrow = 2, ncol = 1) +
+  
+  scale_x_continuous(
+    breaks = seq(0, 1, by = 0.2),
+    limits = c(0, 1),
+    expand = c(0, 0)
+  )
+```
+
+To improve clarity and accessibility, I cleaned up the axis labels, and set distinct fill colours for each group: violet for autistic participants and grey for non-autistic participants. I also removed the legend, since the group names are already displayed in the facet titles.
+
+```{r}
+en_mixed_plot_separate <- communication_rapport |>
+  filter(research_group == "Mixed") |>
+  
+  ggplot(aes(x = engagement_prop)) +
+  
+  geom_histogram(aes(fill = asc_status),
+                 binwidth  = 0.2,
+                 boundary  = 0,
+                 alpha     = 0.6,
+                 show.legend = FALSE) +
+  
+  facet_wrap(
+    ~ asc_status, nrow = 2, ncol = 1,
+    labeller = labeller(
+      asc_status = c("Autistic"      = "Autistic Observers:",
+                     "Non-autistic"  = "Non-autistic Observers:"))
+  ) +
+  
+  scale_x_continuous(
+    breaks = seq(0, 1, 0.2),
+    limits = c(0, 1),
+    minor_breaks = NULL
+  ) +
+  
+  scale_y_continuous(
+    limits       = c(0, 6),    
+    breaks       = 0:6,         
+    minor_breaks = NULL         
+  ) +
+  
+  scale_fill_manual(values = c(
+    "Autistic"     = "#D41159",
+    "Non-autistic" = "#6B7280"
+  )) +
+  
+  labs(x = "Observer's Verbal Engagement",
+       y = "Frequency") +
+  
+  theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 14, margin = margin(t = 10)),
+    axis.title.y = element_text(size = 14, margin = margin(r = 10)),
+    strip.text   = element_text(size = 12)
+  )
+
+en_mixed_plot_separate
+```
+
+Finally, I added the sample size for each group at the top-right of each facet:
+
+```{r}
+label_df <- communication_rapport |> 
+  filter(research_group == "Mixed") |> 
+  group_by(asc_status) |> 
+  summarise(
+    n = n(),
+    x = 1,     # right side of x-axis
+    y = Inf       # top of y-axis
+  )
+
+en_mixed_plot_separate <- en_mixed_plot_separate +
+  
+  geom_text(
+    data = label_df,
+    aes(x = x, y = y, label = paste0("n = ", n)),
+    hjust = 1, vjust = 1.5, size = 4.5
+  ) 
+
+en_mixed_plot_separate
+```
+
+To connect this visual with the rest of the analysis and give broader context, I included a boxplot showing overall engagement for the Mixed group. I overlaid each participant’s data point, coloured and shaped by their autism status:
+
+```{r}
+en_mixed_plot_overall <- communication_rapport |> 
+  filter(research_group == "Mixed") |>
+  ggplot(aes(x = research_group, y = engagement_prop)) +
+  geom_boxplot(fill = "#1A85FF", 
+               colour = "grey30", 
+               alpha = 0.2, 
+               size = 0.7, 
+               show.legend = FALSE) +
+  
+  geom_jitter(aes(shape = asc_status, colour = asc_status), 
+              width = 0.1,
+              size = 1.7) +
+  
+  scale_y_continuous(
+    limits = c(-0.01, 1),
+    breaks  = seq(0, 1, 0.2)         
+  )  +
+  
+  scale_colour_manual(values = c("Autistic" = "#D41159", "Non-autistic" = "#6B7280")) +
+    
+  labs(x = "Mixed Pairs",
+       y = "Observer's Verbal Engagement",
+       shape = "Observer's Status:", 
+       colour = "Observer's Status:") +
+  
+  theme_minimal() +
+  
+  theme(
+    axis.text.x = element_blank(),
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(size = 14, margin = margin(r = 10)),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    legend.position = "bottom"
+    )
+
+en_mixed_plot_overall
+```
+
+To tie it all together, I placed the boxplot and the histograms side-by-side and added a clear title:
+
+```{r}
+(en_mixed_plot_overall | en_mixed_plot_separate) +  plot_annotation(
+  title = "Autistic and Non-Autistic Individuals Show Similar Engagement in Mixed Pairs")
+```
+
+### Scatterplots: Understanding Engagement's Effect on Rapport
+
+Scatterplots are ideal for exploring the relationship between two continuous variables. In this project, I used them to examine whether engagement is associated with rapport, measured immediately after each interaction.
+
+I found some evidence of a positive relationship: interaction partners reported slightly higher rapport when participants engaged more during the interaction. However, the effect size was small, and when analysing each group separately, there was no clear relationship.
+
+To communicate these findings, I used a scatterplot. 
+
+```{r}
+en_rapport_scatterplot <- communication_rapport |> 
+  
+  mutate(
+    color_group = case_when(
+      rapport_score < 300         ~ "Red",
+      TRUE                        ~ "Black"
+    )
+  ) |>
+  
+  ggplot(aes(x = engagement_prop, y = rapport_score)) +
+  
+  geom_jitter(aes(colour = color_group)) +
+  
+  scale_colour_manual(
+    values = c(
+      "Red"   = "red",
+      "Black" = "black"
+    ),
+    guide = "none"
+  )
+
+
+en_rapport_scatterplot
+```
+
+This version shows the general shape of the data, but the y-axis needs adjusting. Rapport scores range from 0 to 500, so let's reflect that:
+
+```{r}
+en_rapport_scatterplot <- en_rapport_scatterplot + 
+  
+  coord_cartesian(ylim = c(0, 500)) +
+  
+  scale_x_continuous(
+    breaks = seq(0, 1, 0.2),
+    limits = c(-0.1, 1.1),
+    expand = expansion()
+  )
+
+en_rapport_scatterplot
+```
+
+Now that we’ve set the correct scale, let’s add a regression line using the `geom_smooth` function:
+
+```{r}
+en_rapport_scatterplot <- en_rapport_scatterplot + 
+  
+  geom_smooth(method = "lm", se = TRUE, 
+              colour = "blue", 
+              fill = "lightblue", 
+              alpha = 0.2, 
+              linewidth = 0.8)
+
+en_rapport_scatterplot
+```
+
+Next, I want to edit the axis labels and add a clear title:
+
+```{r}
+en_rapport_scatterplot <- en_rapport_scatterplot +
+  
+  labs(
+    x = "Observer's Verbal Engagement",
+    y = "Demonstrator's Rapport Score (0–500)"
+  ) +
+  
+  theme_minimal() +
+  
+  theme(
+    axis.title.x = element_text(size = 14, margin = margin(t = 10)),
+    axis.title.y = element_text(size = 14, margin = margin(r = 10))
+    )
+
+en_rapport_scatterplot
+```
+
+Finally, I want to add the actual values from my regression model — the intercept and slope — to the plot as a short annotation:
+
+```{r}
+en_rapport_scatterplot <- en_rapport_scatterplot +
+  
+  annotate("text", x = 0.75, y = 370, 
+           label = "y = 383.7 + 62x", 
+           hjust = 0, size = 4.7, color = "blue")
+
+en_rapport_scatterplot
+```
+
+Now the key model information is clearly visible on the plot. This makes it easier for readers to interpret the regression line and assess the strength of the relationship at a glance.
+
+# Project Conclusion
+
+Thank you for taking your time to review this project. It was my first project in R, and it took a lot of time and energy, but I'm very grateful since it's been a great learning journey for me.
+
+If you have any questions/comments or would like me to analyse your data, please reach out to me at daniilssmirnovs11\@gmail.com.
+
+Otherwise, thank you again and have a great day!
+
+my last words forthis project are Rrrrr
+
+# Code Appendix
+
+## Analysing Data
+
+### Analysing Backchanneling
+
+```{r}
+identify_outliers(communication_rapport, research_group, backchanneling_freq)
+```
+```{r}
+plot_boxplots(communication_rapport, research_group, backchanneling_freq)
+```
+
+```{r}
+run_diagnostic_plots(communication_rapport, "research_group", "backchanneling_freq")
+```
+
+```{r}
+run_one_way_anova(communication_rapport, "research_group", 
+                  "backchanneling_freq", "original")
+```
+
+```{r}
+run_tukey_hsd(communication_rapport, "research_group", 
+              "backchanneling_freq", "original")
+```
+
+```{r}
+check_distribution_in_mixed_pairs(communication_rapport, backchanneling_freq)
+```
+
+```{r}
+oneway_test(backchanneling_freq ~ asc_status, 
+            data = communication_rapport |> filter(research_group == "Mixed"))
+```
+
+### Analysing Backchaneling and Rapport Relationship
+
+```{r}
+plot_scatter_with_fitted_line(communication_rapport, backchanneling_freq, rapport_score)
+```
+
+```{r}
+run_diagnostic_plots(communication_rapport, "backchanneling_freq", "rapport_score")
+```
+
+```{r}
+run_simple_linear_regression(communication_rapport, "backchanneling_freq", "rapport_score")
+```
+
+```{r}
+run_simple_linear_regression(communication_rapport |> 
+                               filter(
+                                 rapport_score > 300 &
+                                 !(backchanneling_freq < 2.5 &
+                                    rapport_score > 470) &
+                                 !(backchanneling_freq > 10 &
+                                    rapport_score < 350)
+                                 ), 
+                             "backchanneling_freq", "rapport_score")
+```
+
+```{r}
+plot_scatter_with_fitted_line(communication_rapport |> 
+                                filter(research_group == "Matched Autistic"),
+                              backchanneling_freq, rapport_score,
+                              log_transformation = TRUE,
+                              sqrt_transformation = TRUE)
+```
+
+```{r}
+plot_scatter_with_fitted_line(communication_rapport |> 
+                                filter(research_group == "Matched Autistic" &
+                                       rapport_score > 300),
+                              backchanneling_freq, rapport_score,
+                              log_transformation = TRUE,
+                              sqrt_transformation = TRUE)
+```
+
+```{r}
+run_diagnostic_plots(communication_rapport |> 
+                       filter(research_group == "Matched Autistic"), 
+                     "backchanneling_freq", "rapport_score")
+```
+
+```{r}
+run_diagnostic_plots(communication_rapport |> 
+                       filter(research_group == "Matched Autistic" &
+                              rapport_score > 300), 
+                     "backchanneling_freq", "rapport_score")
+```
+
+```{r}
+plot_scatter_with_fitted_line(communication_rapport |> 
+                                filter(research_group == "Matched Non-autistic"),
+                              backchanneling_freq, rapport_score,
+                              log_transformation = TRUE,
+                              sqrt_transformation = TRUE)
+```
+
+```{r}
+run_diagnostic_plots(communication_rapport |> 
+                       filter(research_group == "Matched Non-autistic"), 
+                     "backchanneling_freq", "rapport_score")
+```
+
+```{r}
+plot_scatter_with_fitted_line(communication_rapport |> 
+                                filter(research_group == "Mixed"),
+                              backchanneling_freq, rapport_score,
+                              log_transformation = TRUE,
+                              sqrt_transformation = TRUE)
+```
+
+```{r}
+# Autistic Group (with the outlier)
+run_simple_linear_regression(communication_rapport |> 
+                       filter(research_group == "Matched Autistic"), 
+                       "backchanneling_freq", "rapport_score")
+
+# Autistic Group (without the outlier)
+run_simple_linear_regression(communication_rapport |> 
+                       filter(research_group == "Matched Autistic" &
+                              rapport_score > 300), 
+                       "backchanneling_freq", "rapport_score")
+```
+
+```{r}
+# Non-autistic Group:
+
+run_simple_linear_regression(communication_rapport |> 
+                       filter(research_group == "Matched Non-autistic"), 
+                       "backchanneling_freq", "rapport_score")
+```
+
+## Sharing Data
+
+### Interaction Visualisation
+
+Without Log transformation:
+
+```{r}
+interaction_boxplots <- communication_rapport |>
+  
+  mutate(
+    color_group = case_when(
+      interaction_min > 6.8 & interaction_min < 10  ~ "Blue",
+      interaction_min > 10                          ~ "Red",
+      TRUE                                          ~ "Black"
+    )
+  ) |>
+  ggplot(aes(research_group, interaction_min)) +
+  
+  geom_boxplot(aes(fill = research_group),
+               size = 0.7, alpha = 0.2,
+               colour = "grey30",
+               show.legend = FALSE,
+               outliers = FALSE) +
+  
+  geom_jitter(aes(shape = research_group, colour = color_group),
+              width = 0.1, show.legend = FALSE, size = 1.7) +
+  
+  geom_text(data = group_sizes,
+            aes(research_group, 0, label = paste0("n = ", n)),
+            vjust = 1.5, size = 4.5) +
+  
+  scale_colour_manual(
+    values = c(
+      "Red"   = "red",
+      "Blue"  = "blue",
+      "Black" = "black"
+    ),
+    guide = "none"
+  ) +
+
+  scale_fill_manual(values = c(
+    "Matched Autistic"     = "#D41159",
+    "Matched Non-autistic" = "#6B7280",
+    "Mixed"                = "#1A85FF"
+  )) +
+  
+  scale_y_continuous(limits = c(-1, 15),
+                     breaks  = seq(0, 15, 2),
+                     expand  = expansion(mult = c(0.02, 0.06))) +
+  
+  labs(
+    x = "Dyad Group",
+    y = "Task-oriented interaction length, min"
+  ) +
+  
+  theme_minimal() +
+  
+  theme(
+    axis.text.x = element_text(size = 14),   
+    axis.title.x = element_text(size = 14, margin = margin(t = 10)),
+    axis.title.y = element_text(size = 14, margin = margin(r = 10))
+    )
+
+interaction_boxplots
+```
+
+With Log transformation:
+
+```{r}
+interaction_boxplots_log <- communication_rapport |>
+  
+  mutate(
+    color_group = case_when(
+      log(interaction_min) > 2.5  ~ "Blue",
+      TRUE                      ~ "Black"
+    )
+  ) |>
+  
+  ggplot(aes(research_group, log(interaction_min))) +
+  
+  geom_boxplot(aes(fill = research_group),
+               size = 0.7, alpha = 0.2,
+               colour = "grey30",
+               show.legend = FALSE,
+               outliers = FALSE) +
+  
+  geom_jitter(aes(shape = research_group, colour = color_group),
+              width = 0.1, show.legend = FALSE, size = 1.7) +
+  
+  geom_text(data = group_sizes,
+            aes(research_group, 0, label = paste0("n = ", n)),
+            vjust = 2, size = 4.5) +
+  
+  scale_colour_manual(
+    values = c(
+      "Blue"  = "blue",
+      "Black" = "black"
+    ),
+    guide = "none"
+  ) +
+
+  scale_fill_manual(values = c(
+    "Matched Autistic"     = "#D41159",
+    "Matched Non-autistic" = "#6B7280",
+    "Mixed"                = "#1A85FF"
+  )) +
+  
+  scale_y_continuous(limits = c(-0.5, 4),
+                     breaks  = seq(0, 4, 1),
+                     expand  = expansion(mult = c(0.02, 0.06))) +
+  
+  labs(
+    x = "Dyad Group",
+    y = "Lot-transformed task-oriented 
+    interaction length, log(min)"
+  ) +
+  
+  theme_minimal() +
+  
+  theme(
+    axis.text.x = element_text(size = 14),   
+    axis.title.x = element_text(size = 14, margin = margin(t = 10)),
+    axis.title.y = element_text(size = 14, margin = margin(r = 10))
+    )
+
+interaction_boxplots_log
+```
+
+### Rapport Visualisation
+
+```{r}
+## 1. Tukey comparisons + per-comparison colour ---------------------------
+tukey_df <- data.frame(
+  group1     = c("Matched Autistic",
+                 "Matched Non-autistic",
+                 "Matched Autistic"),
+  group2     = c("Matched Non-autistic",
+                 "Mixed",
+                 "Mixed"),
+  p.adj      = c(0.9175, 0.0110, 0.0459),
+  y.position = c(515, 530, 560),
+  label      = c("p > 0.1", "p < 0.02", "p < 0.05"),
+  colour     = c("Black", "Red", "Red")     # <- colour for each bracket
+)
+
+## 2. Plot -----------------------------------------------------------------
+rapport_boxplots <- communication_rapport |>
+  mutate(
+    color_group = case_when(
+      rapport_score < 300  & research_group == "Matched Autistic"      ~ "Red",
+      rapport_score > 300 & rapport_score < 400 &
+        research_group == "Matched Autistic"                           ~ "Blue",
+      rapport_score < 300  & research_group == "Matched Non-autistic"  ~ "Blue",
+      TRUE                                                             ~ "Black"
+    )
+  ) |>
+  ggplot(aes(research_group, rapport_score)) +
+  
+  geom_boxplot(aes(fill = research_group),
+               size = 0.7, alpha = 0.2,
+               colour = "grey30",
+               show.legend = FALSE,
+               outliers = FALSE) +
+  
+  geom_jitter(aes(shape = research_group, colour = color_group),
+              width = 0.1, show.legend = FALSE, size = 1.7) +
+  
+  stat_pvalue_manual(
+    tukey_df,
+    label      = "label",
+    y.position = "y.position",
+    tip.length = 0.02,
+    textsize   = 4,
+    color      = "colour",           
+    show.legend = FALSE
+  ) +
+  
+  geom_text(data = group_sizes,
+            aes(research_group, 0, label = paste0("n = ", n)),
+            vjust = 2, size = 4.5) +
+  
+  scale_colour_manual(
+    values = c(
+      "Red"   = "red",
+      "Blue"  = "blue",
+      "Black" = "black"
+    ),
+    guide = "none"
+  ) +
+
+  scale_fill_manual(values = c(
+    "Matched Autistic"     = "#D41159",
+    "Matched Non-autistic" = "#6B7280",
+    "Mixed"                = "#1A85FF"
+  )) +
+  
+  scale_y_continuous(limits = c(-50, 600),
+                     breaks  = seq(0, 500, 100),
+                     expand  = expansion(mult = c(0.02, 0.06))) +
+  
+  labs(
+    x = "Dyad Group",
+    y = "Rapport Score (0–500)"
+  ) +
+  
+  theme_minimal() +
+  
+  theme(
+    axis.text.x = element_text(size = 14),   
+    axis.title.x = element_text(size = 14, margin = margin(t = 10)),
+    axis.title.y = element_text(size = 14, margin = margin(r = 10))
+    )
+
+rapport_boxplots
+```
+
+### Rapport and Engagement Relationship Visualisation (Each Group Individually)
+
+```{r}
+rapport_engagement_indiv <- communication_rapport |> 
+  
+  ggplot(aes(x = engagement_prop, y = rapport_score)) +
+  
+  geom_jitter(aes(shape = research_group),
+              size = 1.7, show.legend = FALSE) +
+  
+  facet_wrap(~ research_group,
+             nrow = 2, ncol = 2) +
+  
+  scale_x_continuous(
+    breaks = seq(0, 1, 0.2),
+    limits = c(-0.1, 1.1),
+    expand = expansion()
+  ) +
+  
+  scale_y_continuous(
+    limits  = c(0, 550),    
+    breaks  = seq(0, 500, 100),
+    expand  = expansion(mult = c(0.02, 0.06))) +
+  
+  geom_text(
+    data = group_sizes,
+    aes(x = 1.05, y = 20, label = paste0("n = ", n)),
+    inherit.aes = FALSE,
+    hjust = 1, vjust = 0, size = 4
+  ) +
+  
+  labs(
+    x = "Observer's Verbal Engagement",
+    y = "Demonstrator's Rapport Score (0–500)"
+  ) +
+  
+  theme_minimal() +
+  
+  theme(
+    strip.text   = element_text(size = 12),
+    axis.title.x = element_text(size = 14, margin = margin(t = 10)),
+    axis.title.y = element_text(size = 14, margin = margin(r = 10))
+    )
+
+
+rapport_engagement_indiv
+```
+
+```{r}
+group_sizes_sub <- group_sizes |>
+  filter(research_group != "Matched Non-autistic")
+
+lbl_df <- data.frame(
+  research_group = "Matched Autistic",   
+  x = 0.02,                              
+  y = 500,                               
+  label = "y = 374.51 + 108.55x"
+)
+
+rapport_engagement_indiv_line <- communication_rapport |>
+  filter(research_group != "Matched Non-autistic") |>
+  
+  mutate(color_group = ifelse(rapport_score < 300, "Red", "Black")) |>
+  
+  ggplot(aes(engagement_prop, rapport_score)) +
+  
+  geom_jitter(
+    aes(shape = research_group, colour = color_group),
+    size = 1.7, show.legend = FALSE
+  ) +
+  
+  geom_smooth(
+    data      = ~ subset(.x, research_group == "Matched Autistic"),
+    method    = "lm", se = TRUE, fullrange = TRUE,
+    colour    = "blue", fill = "lightblue",
+    alpha     = 0.15, linewidth = 0.9, show.legend = FALSE
+  ) +
+  facet_wrap(~ research_group, nrow = 1, ncol = 2) +
+  
+ 
+  scale_shape_manual(values = c(
+    "Matched Autistic" = 16,   
+    "Mixed"            = 15    
+  )) +
+  
+  scale_colour_manual(values = c(Red = "red", Black = "black"), guide = "none") +
+
+  scale_x_continuous(
+    breaks = seq(0, 1, 0.2),
+    limits = c(-0.01, 1.01),
+    expand = expansion(mult = c(0.02, 0.06))
+  ) +
+  scale_y_continuous(
+    limits = c(0, 550),
+    breaks = seq(0, 500, 100),
+    expand = expansion(mult = c(0, 0.06))
+  ) +
+  
+  geom_text(
+    data = lbl_df,
+    aes(x, y, label = label),
+    inherit.aes = FALSE,
+    colour = "blue", hjust = 0, vjust = 1, size = 4
+  ) +
+  geom_text(
+    data = group_sizes_sub,
+    aes(x = 1, y = 20, label = paste0("n = ", n)),
+    inherit.aes = FALSE,
+    hjust = 1, vjust = 0, size = 4
+  ) +
+  
+  labs(
+    x = "Observer's Verbal Engagement",
+    y = "Demonstrator's Rapport Score (0–500)"
+  ) +
+  
+  theme_minimal() +
+  theme(
+    strip.text        = element_text(size = 12),
+    axis.title.x      = element_text(size = 14, margin = margin(t = 10)),
+    axis.title.y      = element_text(size = 14, margin = margin(r = 10)),
+    panel.spacing.x   = unit(2, "lines")    
+  )
+
+rapport_engagement_indiv_line
+```
+
+### Role Switching Visualisation
+
+```{r}
+role_switch_bar_graph <- communication_rapport |> 
+  
+  mutate(
+    swap_y_n = ifelse(swap_y_n == TRUE, "Yes", "No")
+  ) |> 
+  
+  ggplot(aes(x = research_group, fill = swap_y_n)) +
+  
+  geom_bar(position = "fill") +
+  
+labs(
+    x = "Dyad group",
+    y = "Relative Frequency", 
+    fill = "Role switch"
+  ) + 
+  
+  scale_fill_manual(values = c("#999999", "#E69F00")) +
+  
+  theme_minimal() + 
+  
+  theme(
+    axis.text.x = element_text(size = 12),   
+    axis.title.x = element_text(size = 14, margin = margin(t = 10)),
+    axis.title.y = element_text(size = 14, margin = margin(r = 10)),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 14))
+
+role_switch_bar_graph
+```
+
+### Backchanneling Visualisation
+
+```{r}
+tukey_df <- data.frame(
+  group1     = c("Matched Autistic",
+                 "Matched Non-autistic",
+                 "Matched Autistic"),
+  group2     = c("Matched Non-autistic",
+                 "Mixed",
+                 "Mixed"),
+  p.adj      = c(0.0185, 0.0009, 0.6786),
+  y.position = c(17, 18, 19.5),
+  label      = c("p < 0.02", "p < 0.001", "p > 0.1"),
+  colour     = c("Red", "Red", "Black")     # <- colour for each bracket
+)
+
+backchanneling_boxplots <- communication_rapport |>
+  
+  ggplot(aes(research_group, backchanneling_freq)) +
+  
+  geom_boxplot(aes(fill = research_group),
+               size = 0.7, alpha = 0.2,
+               colour = "grey30",
+               show.legend = FALSE,
+               outliers = FALSE) +
+  
+  geom_jitter(aes(shape = research_group),
+              width = 0.1, show.legend = FALSE, size = 1.7) +
+  
+  stat_pvalue_manual(
+    tukey_df,
+    label      = "label",
+    y.position = "y.position",
+    tip.length = 0.02,
+    textsize   = 4,
+    color      = "colour",           
+    show.legend = FALSE
+  ) +
+  
+  geom_text(data = group_sizes,
+            aes(research_group, 0, label = paste0("n = ", n)),
+            vjust = 2, size = 4.5) +
+  
+  scale_colour_manual(
+    values = c(
+      "Red"   = "red",
+      "Blue"  = "blue",
+      "Black" = "black"
+    ),
+    guide = "none"
+  ) +
+
+  scale_fill_manual(values = c(
+    "Matched Autistic"     = "#D41159",
+    "Matched Non-autistic" = "#6B7280",
+    "Mixed"                = "#1A85FF"
+  )) +
+  
+  scale_y_continuous(limits = c(-0.5, 20),
+                     breaks  = seq(0, 20, 4),
+                     expand  = expansion(add = 2)) +
+  
+  labs(
+    x = "Dyad Group",
+    y = "Rate of observer's verbal backchannel  
+    response, 1/min"
+  ) +
+  
+  theme_minimal() +
+  
+  theme(
+    axis.text.x = element_text(size = 14),   
+    axis.title.x = element_text(size = 14, margin = margin(t = 10)),
+    axis.title.y = element_text(size = 14, margin = margin(r = 10))
+    )
+
+backchanneling_boxplots
+```
+
+### Backchanneling Within Mixed Pairs Visualisation
+
+```{r}
+backchannel_mixed_histogram <- communication_rapport |>
+  filter(research_group == "Mixed") |>
+  
+  ggplot(aes(x = backchanneling_freq)) +
+  
+  geom_histogram(aes(fill = asc_status),
+                 binwidth  = 2,
+                 boundary  = 0,
+                 alpha     = 0.6,
+                 show.legend = FALSE,
+                 closed = "left") +
+  
+  facet_wrap(
+    ~ asc_status, nrow = 2, ncol = 1,
+    labeller = labeller(
+      asc_status = c("Autistic"      = "Autistic Observers:",
+                     "Non-autistic"  = "Non-autistic Observers:"))
+  ) +
+  
+  scale_x_continuous(
+    breaks = seq(0, 16, 2),
+    limits = c(0, 18),
+    minor_breaks = NULL
+  ) +
+  
+  scale_y_continuous(
+    limits       = c(0, 6),    
+    breaks       = 0:6,         
+    minor_breaks = NULL         
+  ) +
+  
+  scale_fill_manual(values = c(
+    "Autistic"     = "#D41159",
+    "Non-autistic" = "#6B7280"
+  )) +
+  
+  labs(x = "    Rate of observer's verbal 
+     backchannel response, 1/min",
+       y = "Frequency") +
+  
+  theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 14, margin = margin(t = 10)),
+    axis.title.y = element_text(size = 14, margin = margin(r = 10)),
+    strip.text   = element_text(size = 12)
+  ) +
+  
+  geom_text(
+    data = label_df,
+    aes(x = 16, y = 5.5, label = paste0("n = ", n)),
+    hjust = 1, vjust = 1.5, size = 4.5
+  )
+
+backchannel_mixed_boxplot <- communication_rapport |> 
+  filter(research_group == "Mixed") |>
+  ggplot(aes(x = research_group, y = backchanneling_freq)) +
+  geom_boxplot(fill = "#1A85FF", 
+               colour = "grey30", 
+               alpha = 0.2, 
+               size = 0.7, 
+               show.legend = FALSE) +
+  
+  geom_jitter(aes(shape = asc_status, colour = asc_status), 
+              width = 0.1,
+              size = 1.7) +
+  
+  scale_y_continuous(limits = c(-0.5, 20),
+                     breaks  = seq(0, 20, 4),
+                     expand  = expansion(add = 2)) +
+  
+  scale_colour_manual(values = c("Autistic" = "#D41159", "Non-autistic" = "#6B7280")) +
+    
+  labs(x = "Mixed Pairs",
+       y = "Rate of observer's verbal backchannel 
+       response, 1/min",
+       shape = "Observer's Status:", 
+       colour = "Observer's Status:") +
+  
+  theme_minimal() +
+  
+  theme(
+    axis.text.x = element_blank(),
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(size = 14, margin = margin(r = 10)),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    legend.position = "bottom"
+    )
+
+backchannel_mixed_combined <- (backchannel_mixed_boxplot | backchannel_mixed_histogram)
+
+backchannel_mixed_combined
+```
+
+### Rapport and Backchanneling Relationship Visualisation (Overall)
+
+```{r}
+rapport_backchanneling_overall <- communication_rapport |> 
+  
+  ggplot(aes(x = backchanneling_freq, y = rapport_score)) +
+  
+  geom_jitter() +
+  
+  coord_cartesian(ylim = c(0, 500)) +
+  
+  scale_x_continuous(
+    limits = c(-0.1, 18),
+    breaks  = seq(0, 18, 4)
+  ) +
+  
+  labs(
+    x = "Rate of observer's verbal backchannel 
+       response, 1/min",
+    y = "Demonstrator's Rapport Score (0–500)"
+  ) +
+  
+  theme_minimal() +
+  
+  theme(
+    axis.title.x = element_text(size = 14, margin = margin(t = 10)),
+    axis.title.y = element_text(size = 14, margin = margin(r = 10))
+    )
+
+rapport_backchanneling_overall
+```
+
+
+```{r}
+rapport_backchanneling_overall_line <- communication_rapport |> 
+  
+  mutate(
+    color_group = case_when(
+      (rapport_score < 300)                                ~ "Red",
+      (backchanneling_freq < 2.5 & rapport_score > 470)    ~ "Red",
+      (backchanneling_freq > 10 & rapport_score < 350)     ~ "Red",
+      TRUE                                                 ~ "Black"
+    )
+  ) |>
+  
+  ggplot(aes(x = backchanneling_freq, y = rapport_score)) +
+  
+  geom_jitter(aes(color = color_group)) +
+  
+  coord_cartesian(ylim = c(0, 500)) +
+  
+  scale_x_continuous(
+    limits = c(-0.1, 18),
+    breaks  = seq(0, 18, 4)
+  ) +
+  
+  scale_colour_manual(
+    values = c(
+      "Red"   = "red",
+      "Black" = "black"
+    ),
+    guide = "none"
+  ) +
+  
+  geom_smooth(method = "lm", se = TRUE, 
+              colour = "blue", 
+              fill = "lightblue", 
+              alpha = 0.2, 
+              linewidth = 0.8) +
+  
+  labs(
+    x = "Rate of observer's verbal backchannel 
+       response, 1/min",
+    y = "Demonstrator's Rapport Score (0–500)"
+  ) +
+  
+  theme_minimal() +
+  
+  theme(
+    axis.title.x = element_text(size = 14, margin = margin(t = 10)),
+    axis.title.y = element_text(size = 14, margin = margin(r = 10))
+    ) +
+  
+  annotate("text", x = 12, y = 370, 
+           label = "y = 393.606 + 3.749x", 
+           hjust = 0, size = 4.7, color = "blue")
+
+rapport_backchanneling_overall_line
+```
+
+```{r}
+rapport_backchanneling_overall_line_n_outliers <- communication_rapport |> 
+  
+  filter(rapport_score > 300 &
+         !(backchanneling_freq < 2.5 & rapport_score > 470) &
+         !(backchanneling_freq > 10  & rapport_score < 350)
+         )|>
+  
+  ggplot(aes(x = backchanneling_freq, y = rapport_score)) +
+  
+  geom_jitter() +
+  
+  coord_cartesian(ylim = c(0, 500)) +
+  
+  scale_x_continuous(
+    limits = c(-0.1, 18),
+    breaks  = seq(0, 18, 4)
+  ) +
+  
+  geom_smooth(method = "lm", se = TRUE, 
+              colour = "blue", 
+              fill = "lightblue", 
+              alpha = 0.2, 
+              linewidth = 0.8) +
+  
+  labs(
+    x = "Rate of observer's verbal backchannel 
+       response, 1/min",
+    y = "Demonstrator's Rapport Score (0–500)"
+  ) +
+  
+  theme_minimal() +
+  
+  theme(
+    axis.title.x = element_text(size = 14, margin = margin(t = 10)),
+    axis.title.y = element_text(size = 14, margin = margin(r = 10))
+    ) +
+  
+  annotate("text", x = 12, y = 370, 
+           label = "y = 385.182 + 6.566x", 
+           hjust = 0, size = 4.7, color = "blue")
+
+rapport_backchanneling_overall_line_n_outliers
+```
+
+### Rapport and Backchanneling Relationship Visualisation (Each Group Individually)
+
+```{r}
+rapport_backchanneling_indiv <- communication_rapport |> 
+  
+  ggplot(aes(x = backchanneling_freq, y = rapport_score)) +
+  
+  geom_jitter(aes(shape = research_group),
+              size = 1.7, show.legend = FALSE) +
+  
+  facet_wrap(~ research_group,
+             nrow = 2, ncol = 2) +
+  
+  scale_x_continuous(
+    limits = c(-0.1, 18),
+    breaks  = seq(0, 18, 4)
+  ) +
+  
+  scale_y_continuous(
+    limits  = c(0, 550),    
+    breaks  = seq(0, 500, 100),
+    expand  = expansion(mult = c(0.02, 0.06))) +
+  
+  geom_text(
+    data = group_sizes,
+    aes(x = 17, y = 20, label = paste0("n = ", n)),
+    inherit.aes = FALSE,
+    hjust = 1, vjust = 0, size = 4
+  ) +
+  
+  labs(
+    x = "Rate of observer's verbal backchannel 
+       response, 1/min",
+    y = "Demonstrator's Rapport Score (0–500)"
+  ) +
+  
+  theme_minimal() +
+  
+  theme(
+    strip.text   = element_text(size = 12),
+    axis.title.x = element_text(size = 14, margin = margin(t = 10)),
+    axis.title.y = element_text(size = 14, margin = margin(r = 10))
+    )
+
+rapport_backchanneling_indiv
+```
+
+```{r}
+# original data for the two existing groups
+base_df <- communication_rapport |>
+  filter(research_group %in% c("Matched Autistic", "Matched Non-autistic"))
+
+# second copy of the autistic rows, but drop the outlier (< 300)
+aut_no_out_df <- base_df |>
+  filter(research_group == "Matched Autistic", rapport_score >= 300) |>
+  mutate(research_group = "Matched Autistic (no outlier)")
+
+# bind them together
+plot_df <- bind_rows(base_df, aut_no_out_df) |>
+  mutate(research_group = factor(
+    research_group,
+    levels = c("Matched Autistic",
+               "Matched Autistic (no outlier)",
+               "Matched Non-autistic")
+  ))
+
+size_df <- plot_df |>
+  count(research_group, name = "n") |>
+  mutate(x = 17, y = 25, label = paste0("n = ", n))
+
+rapport_backchanneling_indiv_line <- plot_df |> 
+  
+  mutate(color_group = ifelse(
+    (rapport_score < 300 & research_group == "Matched Autistic"), 
+    "Red", "Black")) |>
+  
+  ggplot(aes(backchanneling_freq, rapport_score)) +
+  
+  geom_jitter(aes(shape = research_group, colour = color_group),
+              size = 1.7, show.legend = FALSE) +
+  
+
+  geom_smooth(
+    data      = ~ subset(.x, research_group == "Matched Autistic (no outlier)"),
+    method    = "lm", se = TRUE, fullrange = TRUE,
+    colour    = "blue", fill = "lightblue", alpha = 0.20, linewidth = 0.8
+  ) +
+  
+  ## three facets across one row
+  facet_wrap(~ research_group, nrow = 2, ncol = 2) +
+  
+  ## axes
+  scale_x_continuous(limits = c(-0.1, 18), breaks = seq(0, 18, 4)) +
+  scale_y_continuous(limits = c(0, 600),
+                     breaks = seq(0, 500, 100),
+                     expand = expansion(mult = c(0.02, 0.06))) +
+  
+  ## fixed shapes so they look different
+  scale_shape_manual(values = c(
+    "Matched Autistic"                = 16,  # solid circle
+    "Matched Autistic (no outlier)"   = 16,   # open circle
+    "Matched Non-autistic"            = 15   # solid square
+  )) +
+  scale_colour_manual(
+    values = c(
+      "Red"   = "red",
+      "Black" = "black"
+    ),
+    guide = "none"
+  ) +
+  
+  ## n-labels
+  geom_text(data = size_df,
+            aes(x, y, label = label),
+            inherit.aes = FALSE,
+            hjust = 1, vjust = 0, size = 4) +
+  
+  ## regression formula inside the blue-line facet
+  geom_text(
+    data = data.frame(research_group = "Matched Autistic (no outlier)",
+                      x = 10, y = 360,
+                      label = "y == 401.80 + 7.80*x"),
+    aes(x, y, label = label),
+    inherit.aes = FALSE, parse = TRUE,
+    colour = "blue", hjust = 0, vjust = 1, size = 4
+  ) +
+  
+  labs(
+    x = "Rate of observer's verbal backchannel 
+       response, 1/min",
+    y = "Demonstrator's rapport score (0–500)"
+  ) +
+  
+  theme_minimal() +
+  theme(
+    strip.text      = element_text(size = 12),
+    axis.title.x    = element_text(size = 14, margin = margin(t = 10)),
+    axis.title.y    = element_text(size = 14, margin = margin(r = 10)),
+    panel.spacing.x = unit(2, "lines")        # extra horizontal space
+  )
+
+rapport_backchanneling_indiv_line
+```
