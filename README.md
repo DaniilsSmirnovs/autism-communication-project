@@ -1,7 +1,4 @@
-# autism-communication-project
-R-based analysis of communication differences between autistic and non-autistic adults
-
-# Communication Differences Between Autistic and Non-Autistic Adults
+# R-Based Analysis of Communication Differences Between Autistic and Non-autistic Adults
 
 This project explores how autistic and non-autistic adults interact with someone of the same or a different neurotype, focusing on verbal engagement and backchanneling. It was completed as part of my Neuroscience Honours year at the University of Edinburgh.
 
