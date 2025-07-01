@@ -29,5 +29,5 @@ I analysed short, task-based conversations between three dyad types: autistic–
 
 I'm happy to collaborate or support research projects involving R data analysis!
 
-- Email: [daniilssmirnovs11@gmail.com]
-- LinkedIn: [www.linkedin.com/in/daniils-smirnovs]  
+- Email: daniilssmirnovs11@gmail.com
+- LinkedIn: www.linkedin.com/in/daniils-smirnovs
