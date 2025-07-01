@@ -21,7 +21,8 @@ I analysed short, task-based conversations between three dyad types: autistic–
 
 ## 📁 Files & Folders
 
-- `autism_communication_analysis.qmd` — Full R analysis write-up in Quarto  
+- `autism_communication_analysis.qmd` — Full R analysis write-up in Quarto
+- `autism_communication_analysis.html` — Rendered report for easy viewing in browser 
 - `dissertation.pdf` — Final dissertation write-up with figures and results  
 - `/scripts/functions.R` — Custom functions for outlier detection, ANOVA, etc.  
 
